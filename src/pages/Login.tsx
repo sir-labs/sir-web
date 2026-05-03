@@ -19,6 +19,17 @@ export default function Login() {
       return;
     }
 
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      if (errorParam === 'access_denied') {
+        setError('Incorrect email or password. Please try again.');
+      } else {
+        setError(`Authentication error: ${errorParam}`);
+      }
+      setSearchParams({});
+      return;
+    }
+
     const code = searchParams.get('code');
     if (code) {
       setLoading(true);
@@ -99,13 +110,22 @@ export default function Login() {
               <p className="text-indigo-300 text-sm tracking-widest animate-pulse">ESTABLISHING CONNECTION...</p>
             </div>
           ) : (
-            <button 
-              onClick={handleLogin} 
-              className="btn w-full h-14 rounded-2xl glass-btn text-lg font-semibold tracking-wide flex items-center justify-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
-              Sign In with Sir
-            </button>
+            <div className="w-full flex flex-col gap-4 mt-2">
+              <button 
+                onClick={handleLogin} 
+                className="btn w-full h-14 rounded-2xl glass-btn text-lg font-semibold tracking-wide flex items-center justify-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                Sign In with Sir
+              </button>
+              
+              <button 
+                onClick={() => navigate('/register')}
+                className="btn w-full h-12 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 font-medium transition-all"
+              >
+                Create new identity
+              </button>
+            </div>
           )}
 
         </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocalStorage } from 'usehooks-ts';
+import AdminPanel from '../components/AdminPanel';
 
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 
@@ -156,6 +157,11 @@ export default function Dashboard() {
           </div>
 
         </div>
+
+        {/* Admin Panel Section */}
+        {user?.role === 'admin' && (
+          <AdminPanel accessToken={accessToken} />
+        )}
       </div>
     </div>
   );
