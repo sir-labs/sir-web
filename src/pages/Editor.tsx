@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocalStorage, useDebounceValue } from "usehooks-ts";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 const BASE_URL = import.meta.env.VITE_BASE_URL ?? "http://localhost:8787";
 
@@ -89,6 +90,7 @@ export default function Editor() {
 
   const [fileName, setFileName] = useState("untitled.tex");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [confirmNewDoc, setConfirmNewDoc] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pdfUrlRef = useRef<string | null>(null);
@@ -265,19 +267,19 @@ export default function Editor() {
   }[status];
 
   return (
-    <div className="h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
+    <div className="neo-root h-screen flex flex-col font-sans overflow-hidden">
       {/* ─── Navbar ─── */}
-      <header className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-slate-900/60 backdrop-blur-md z-10">
+      <header className="glass-panel shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/30 z-10 rounded-none">
         {/* Left */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/dashboard")}
               title="Back to Dashboard"
-              className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+              className="neo-btn neo-btn-soft w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
             >
               <svg
-                className="w-4 h-4 text-slate-300"
+                className="w-4 h-4 text-slate-600"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -291,23 +293,9 @@ export default function Editor() {
               </svg>
             </button>
             <button
-              onClick={() => {
-                if (
-                  confirm(
-                    "Start a new document? Any unsaved changes will be lost.",
-                  )
-                ) {
-                  setSearchParams({}, { replace: true });
-                  setFileName("untitled.tex");
-                  setLatexCode(DEFAULT_LATEX);
-                  setDebouncedCode(DEFAULT_LATEX);
-                  setPdfUrl(null);
-                  if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-                  pdfUrlRef.current = null;
-                }
-              }}
+              onClick={() => setConfirmNewDoc(true)}
               title="New Document"
-              className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-indigo-400"
+              className="neo-btn neo-btn-soft w-9 h-9 rounded-xl flex items-center justify-center transition-colors text-indigo-600"
             >
               <svg
                 className="w-4 h-4"
@@ -325,28 +313,28 @@ export default function Editor() {
             </button>
           </div>
           <div>
-            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-fuchsia-400 leading-none">
+            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-fuchsia-600 leading-none">
               LaTeX Studio
             </h1>
             <input
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              className="text-[10px] text-slate-500 font-mono bg-transparent border-none outline-none w-36 hover:text-slate-400 focus:text-slate-300 transition-colors mt-0.5"
+              className="text-[10px] text-slate-600 font-mono bg-transparent border-none outline-none w-36 hover:text-slate-700 focus:text-slate-800 transition-colors mt-0.5"
               placeholder="untitled.tex"
             />
           </div>
         </div>
 
         {/* Center — view toggle */}
-        <div className="hidden md:flex items-center bg-slate-900 rounded-xl p-1 border border-white/10 gap-1">
+        <div className="neo-inset hidden md:flex items-center rounded-xl p-1 border border-white/30 gap-1">
           {(["split", "editor", "preview"] as ViewMode[]).map((m) => (
             <button
               key={m}
               onClick={() => setViewMode(m)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all ${
                 viewMode === m
-                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                  : "text-slate-500 hover:text-slate-300"
+                  ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                  : "text-slate-500 hover:text-slate-700"
               }`}
             >
               {m}
@@ -360,7 +348,7 @@ export default function Editor() {
           <select
             value={engine}
             onChange={(e) => setEngine(e.target.value as Engine)}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 border border-white/10 text-slate-300 text-xs font-mono focus:outline-none focus:border-indigo-500/50 cursor-pointer"
+            className="neo-select px-3 py-1.5 rounded-xl text-slate-700 text-xs font-mono cursor-pointer"
           >
             <option value="lualatex">LuaLaTeX</option>
             <option value="pdflatex">pdfLaTeX</option>
@@ -369,7 +357,7 @@ export default function Editor() {
 
           {/* Compile status */}
           <div
-            className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-800 border border-white/10 ${statusColor}`}
+            className={`neo-inset flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-xl ${statusColor}`}
           >
             {status === "compiling" && (
               <span className="loading loading-spinner loading-xs" />
@@ -399,12 +387,12 @@ export default function Editor() {
           <button
             onClick={saveFile}
             disabled={saveStatus === "saving"}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors disabled:cursor-not-allowed ${
+            className={`neo-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors disabled:cursor-not-allowed ${
               saveStatus === "saved"
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                 : saveStatus === "error"
-                  ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                  : "bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-50"
+                  ? "bg-rose-100 text-rose-700 border border-rose-200"
+                  : "neo-btn-soft text-slate-700 disabled:opacity-50"
             }`}
           >
             {saveStatus === "saving" && (
@@ -441,7 +429,7 @@ export default function Editor() {
           <button
             onClick={handleDownloadPdf}
             disabled={!pdfUrl}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shadow-lg shadow-indigo-500/20"
+            className="neo-btn neo-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors border-0"
           >
             <svg
               className="w-4 h-4"
@@ -463,7 +451,7 @@ export default function Editor() {
 
       {/* ─── Error banner ─── */}
       {status === "error" && errorMsg && (
-        <div className="shrink-0 flex items-center justify-between px-6 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-400 text-xs font-mono">
+        <div className="neo-alert-error shrink-0 flex items-center justify-between px-6 py-2 text-xs font-mono rounded-none">
           <span>⚠ {errorMsg}</span>
           {compileLog && (
             <button
@@ -478,8 +466,8 @@ export default function Editor() {
 
       {/* ─── Compile log panel ─── */}
       {showLog && compileLog && (
-        <div className="shrink-0 max-h-48 overflow-y-auto bg-slate-950 border-b border-rose-500/20 px-6 py-3">
-          <pre className="text-[11px] text-slate-400 font-mono whitespace-pre-wrap leading-relaxed">
+        <div className="neo-inset shrink-0 max-h-48 overflow-y-auto border-b border-rose-200 px-6 py-3 rounded-none">
+          <pre className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap leading-relaxed">
             {compileLog}
           </pre>
         </div>
@@ -490,14 +478,14 @@ export default function Editor() {
         {/* Editor Pane */}
         {(viewMode === "split" || viewMode === "editor") && (
           <div
-            className={`flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} border-r border-white/10 bg-slate-900/50 relative`}
+              className={`glass-panel flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} border-r border-white/30 relative rounded-none`}
           >
-            <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-600 uppercase pointer-events-none z-10 select-none">
+             <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-500 uppercase pointer-events-none z-10 select-none">
               {fileName}
             </div>
             <div className="flex flex-1 overflow-hidden min-h-0">
               {/* Line numbers */}
-              <div className="select-none text-right text-slate-700 font-mono text-xs py-6 pl-4 pr-3 leading-relaxed bg-slate-950/30 border-r border-white/5 min-w-[3rem] overflow-hidden">
+              <div className="select-none text-right text-slate-500 font-mono text-xs py-6 pl-4 pr-3 leading-relaxed bg-white/40 border-r border-white/20 min-w-[3rem] overflow-hidden">
                 {latexCode.split("\n").map((_, i) => (
                   <div key={i}>{i + 1}</div>
                 ))}
@@ -513,7 +501,7 @@ export default function Editor() {
                 }}
                 onKeyDown={handleTabKey}
                 spellCheck={false}
-                className="flex-1 p-6 bg-transparent text-slate-300 font-mono text-sm leading-relaxed focus:outline-none resize-none overflow-auto scrollbar-thin"
+                className="neo-textarea flex-1 p-6 bg-transparent text-slate-700 font-mono text-sm leading-relaxed focus:outline-none resize-none overflow-auto scrollbar-thin border-0 rounded-none"
               />
             </div>
           </div>
@@ -522,7 +510,7 @@ export default function Editor() {
         {/* Preview Pane */}
         {(viewMode === "split" || viewMode === "preview") && (
           <div
-            className={`flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} bg-slate-100 relative`}
+             className={`neo-inset flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} bg-slate-100 relative rounded-none`}
           >
             <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-400 uppercase pointer-events-none z-10 select-none bg-slate-100/80 px-2 py-0.5 rounded">
               Preview
@@ -578,6 +566,24 @@ export default function Editor() {
         .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
         .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
       `}</style>
+
+      <ConfirmDialog
+        open={confirmNewDoc}
+        title="New document"
+        description="Start a new document? Any unsaved changes will be lost."
+        confirmLabel="New document"
+        onConfirm={() => {
+          setConfirmNewDoc(false);
+          setSearchParams({}, { replace: true });
+          setFileName("untitled.tex");
+          setLatexCode(DEFAULT_LATEX);
+          setDebouncedCode(DEFAULT_LATEX);
+          setPdfUrl(null);
+          if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+          pdfUrlRef.current = null;
+        }}
+        onCancel={() => setConfirmNewDoc(false)}
+      />
     </div>
   );
 }

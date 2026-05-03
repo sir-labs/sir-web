@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const BASE_URL = import.meta.env.VITE_BASE_URL;
 
@@ -15,6 +17,9 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState('user');
   const [editPassword, setEditPassword] = useState('');
+  const [formError, setFormError] = useState('');
+
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === 'users') fetchUsers();
@@ -54,7 +59,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    setPendingDeleteId(null);
     try {
       const res = await fetch(`${BASE_URL}/api/admin/users/${id}`, {
         method: 'DELETE',
@@ -63,11 +68,12 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
       if (!res.ok) throw new Error('Failed to delete user');
       fetchUsers();
     } catch (err: any) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
   const openModal = (user?: any) => {
+    setFormError('');
     if (user) {
       setEditingUser(user);
       setIsCreating(false);
@@ -107,139 +113,228 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
       if (!res.ok) throw new Error(isCreating ? 'Failed to create user' : 'Failed to update user');
       setEditingUser(null);
       setIsCreating(false);
+      setFormError('');
       fetchUsers();
     } catch (err: any) {
-      alert(err.message);
+      setFormError(err.message);
     }
   };
 
   return (
-    <div className="mt-12 w-full animate-slide-up" style={{ animationDelay: '0.2s' }}>
-      <div className="flex items-center gap-4 mb-6">
-        <div className="h-px bg-white/10 flex-1"></div>
-        <h2 className="text-sm font-bold text-slate-400 tracking-widest uppercase">Admin Operations</h2>
-        <div className="h-px bg-white/10 flex-1"></div>
+    <div className="neo-root w-full fade-up" style={{ animationDelay: '0.15s' }}>
+
+      {/* Section header */}
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="text-[15px] font-semibold text-slate-700">Admin Panel</h2>
+        <div className="flex-1 h-px bg-white/35" />
       </div>
 
-      <div className="glass-panel rounded-3xl p-6 relative overflow-hidden">
-        
+      <div className="glass-panel rounded-2xl p-6">
+
         {/* Tabs */}
-        <div className="flex gap-4 mb-6 border-b border-white/10 pb-4 items-center justify-between">
-          <div className="flex gap-4">
-            <button 
+        <div className="flex items-center justify-between mb-6 pb-5 border-b border-white/25">
+          <div className="neo-inset flex items-center gap-1 p-1 rounded-xl">
+            <button
               onClick={() => setActiveTab('users')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'users'
+                  ? 'bg-white shadow-sm text-indigo-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              User Management
+              Users
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('logs')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'logs' ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'logs'
+                  ? 'bg-white shadow-sm text-fuchsia-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
               System Logs
             </button>
           </div>
           {activeTab === 'users' && (
-            <button 
+            <button
               onClick={() => openModal()}
-              className="bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors shadow-lg shadow-indigo-500/20"
+              className="neo-btn neo-btn-primary flex items-center gap-2 h-9 px-4 rounded-xl text-sm font-semibold border-0"
             >
-              + Create User
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              New user
             </button>
           )}
         </div>
 
-        {error && <div className="text-rose-400 text-sm mb-4">{error}</div>}
-        {loading && <div className="text-indigo-400 text-sm mb-4 animate-pulse">Loading data...</div>}
+        {error && (
+          <div className="neo-alert-error flex items-center gap-3 text-sm mb-4 p-3 rounded-xl">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
+        {loading && (
+          <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
+            <div className="w-4 h-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+            Loading…
+          </div>
+        )}
 
         {/* Users Tab */}
         {!loading && activeTab === 'users' && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-slate-400 border-b border-white/5">
-                  <th className="pb-3 font-medium">ID</th>
-                  <th className="pb-3 font-medium">Email</th>
-                  <th className="pb-3 font-medium">Role</th>
-                  <th className="pb-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {users.map(u => (
-                  <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-4 font-mono text-xs text-slate-500">{u.id}</td>
-                    <td className="py-4 text-slate-200">{u.email}</td>
-                    <td className="py-4">
-                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${u.role === 'admin' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right">
-                      <button onClick={() => openModal(u)} className="text-indigo-400 hover:text-indigo-300 mr-4 text-xs font-bold uppercase tracking-wider transition-colors">Edit</button>
-                      <button onClick={() => handleDeleteUser(u.id)} className="text-rose-500 hover:text-rose-400 text-xs font-bold uppercase tracking-wider transition-colors">Delete</button>
-                    </td>
+            {users.length === 0 ? (
+              <p className="text-slate-500 text-sm py-10 text-center">No users found.</p>
+            ) : (
+              <table className="w-full text-left text-sm border-separate border-spacing-y-2">
+                <thead>
+                  <tr>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">User</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">ID</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Role</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} className="group">
+                      <td className="px-4 py-3 rounded-l-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-r-0 group-hover:bg-white/60 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-600 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                            {u.email.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-medium text-slate-700 truncate max-w-[200px]">{u.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
+                        <span className="font-mono text-[11px] text-slate-400 bg-slate-100/60 px-2 py-1 rounded-lg">#{u.id}</span>
+                      </td>
+                      <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-indigo-500' : 'bg-slate-400'}`}></span>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 rounded-r-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-l-0 group-hover:bg-white/60 transition-colors">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openModal(u)}
+                            className="neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-indigo-600 text-xs font-bold transition-all hover:bg-indigo-50"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setPendingDeleteId(u.id)}
+                            className="w-8 h-8 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-600 border border-rose-200 flex items-center justify-center transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
         {/* Logs Tab */}
         {!loading && activeTab === 'logs' && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-slate-400 border-b border-white/5">
-                  <th className="pb-3 font-medium">Time</th>
-                  <th className="pb-3 font-medium">Action</th>
-                  <th className="pb-3 font-medium">Admin ID</th>
-                  <th className="pb-3 font-medium">Target ID</th>
-                  <th className="pb-3 font-medium">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {logs.map(l => (
-                  <tr key={l.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 text-xs text-slate-500">{new Date(l.created_at * 1000).toLocaleString()}</td>
-                    <td className="py-3 font-bold text-fuchsia-400 text-xs">{l.action}</td>
-                    <td className="py-3 font-mono text-xs text-slate-400">{l.admin}</td>
-                    <td className="py-3 font-mono text-xs text-slate-400">{l.target}</td>
-                    <td className="py-3 text-slate-300 text-xs">{l.details}</td>
+            {logs.length === 0 ? (
+              <p className="text-slate-500 text-sm py-10 text-center">No logs found.</p>
+            ) : (
+              <table className="w-full text-left text-sm border-separate border-spacing-y-2">
+                <thead>
+                  <tr>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Time</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Action</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Admin</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Target</th>
+                    <th className="px-4 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {logs.length === 0 && <p className="text-slate-500 text-sm mt-4 text-center">No logs found.</p>}
+                </thead>
+                <tbody>
+                  {logs.map(l => {
+                    const actionColors: Record<string, string> = {
+                      CREATE: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                      DELETE: 'bg-rose-100 text-rose-700 border-rose-200',
+                      UPDATE: 'bg-amber-100 text-amber-700 border-amber-200',
+                    };
+                    const actionKey = (l.action || '').toUpperCase().split('_')[0];
+                    const actionClass = actionColors[actionKey] ?? 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
+                    return (
+                      <tr key={l.id} className="group">
+                        <td className="px-4 py-3 rounded-l-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-r-0 group-hover:bg-white/60 transition-colors whitespace-nowrap">
+                          <span className="text-[11px] text-slate-500 font-mono">{new Date(l.created_at * 1000).toLocaleString()}</span>
+                        </td>
+                        <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${actionClass}`}>{l.action}</span>
+                        </td>
+                        <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
+                          <span className="font-mono text-[11px] text-slate-400 bg-slate-100/60 px-2 py-1 rounded-lg">#{l.admin}</span>
+                        </td>
+                        <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
+                          <span className="font-mono text-[11px] text-slate-400 bg-slate-100/60 px-2 py-1 rounded-lg">#{l.target}</span>
+                        </td>
+                        <td className="px-4 py-3 rounded-r-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-l-0 group-hover:bg-white/60 transition-colors">
+                          <span className="text-xs text-slate-600">{l.details}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
       </div>
 
       {/* Edit/Create Modal */}
-      {(editingUser || isCreating) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-slide-up">
-          <div className="glass-panel w-full max-w-md p-8 rounded-3xl relative">
-            <h3 className="text-xl font-bold mb-6 text-white">{isCreating ? 'Initialize New User' : 'Edit User Identity'}</h3>
+      {(editingUser || isCreating) && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-700/25 backdrop-blur-sm p-4 animate-slide-up">
+          <div className="glass-panel w-full max-w-md rounded-2xl p-8 relative">
+
+            {/* Modal heading */}
+            <div className="mb-6">
+              <h3 className="text-lg font-bold text-slate-800 tracking-tight">
+                {isCreating ? 'New user' : 'Edit user'}
+              </h3>
+              <p className="text-slate-400 text-sm mt-0.5">
+                {isCreating ? 'Fill in the details to create an account.' : 'Update the user\'s information below.'}
+              </p>
+            </div>
+
             <form onSubmit={handleUpdateUser} className="flex flex-col gap-4">
-              
+
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Email</label>
-                <input 
-                  type="email" 
-                  value={editEmail} 
-                  onChange={e => setEditEmail(e.target.value)} 
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                  required 
+                <label className="field-label">Email address</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  className="neo-input w-full rounded-xl px-4 py-2.5"
+                  placeholder="user@example.com"
+                  required
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Role</label>
-                <select 
-                  value={editRole} 
+                <label className="field-label">Role</label>
+                <select
+                  value={editRole}
                   onChange={e => setEditRole(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="neo-select w-full rounded-xl px-4 py-2.5"
                 >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
@@ -247,26 +342,63 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{isCreating ? 'Password' : 'New Password (Leave blank to keep)'}</label>
-                <input 
-                  type="password" 
-                  value={editPassword} 
-                  onChange={e => setEditPassword(e.target.value)} 
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                <label className="field-label">
+                  {isCreating ? 'Password' : 'New password'}
+                </label>
+                {!isCreating && (
+                  <p className="text-slate-400 text-xs mb-1.5">Leave blank to keep current password.</p>
+                )}
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={e => setEditPassword(e.target.value)}
+                  className="neo-input w-full rounded-xl px-4 py-2.5"
+                  placeholder={isCreating ? 'Choose a password' : '••••••••'}
                   required={isCreating}
                 />
               </div>
 
-              <div className="flex gap-4 mt-4">
-                <button type="button" onClick={() => {setEditingUser(null); setIsCreating(false);}} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-bold hover:bg-white/10 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 py-3 rounded-xl glass-btn text-white font-bold">{isCreating ? 'Create Identity' : 'Save Changes'}</button>
+              {formError && (
+                <div className="neo-alert-error flex items-center gap-2 p-3 rounded-xl text-sm">
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-2 pt-2 border-t border-white/30">
+                <button
+                  type="button"
+                  onClick={() => { setEditingUser(null); setIsCreating(false); }}
+                  className="neo-btn neo-btn-soft flex-1 h-11 rounded-xl text-slate-600 font-semibold text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="neo-btn neo-btn-primary flex-1 h-11 rounded-xl text-white font-semibold text-sm border-0"
+                >
+                  {isCreating ? 'Create user' : 'Save changes'}
+                </button>
               </div>
 
             </form>
           </div>
         </div>
+        , document.body
       )}
 
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete user"
+        description="This user and all their data will be permanently deleted. This action cannot be undone."
+        confirmLabel="Delete user"
+        danger
+        onConfirm={() => pendingDeleteId && handleDeleteUser(pendingDeleteId)}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </div>
   );
 }
