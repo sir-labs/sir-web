@@ -137,15 +137,21 @@ export default function Dashboard() {
 
           {/* Quick Stats / Info */}
           <div className="flex flex-col gap-6">
-            <div className="glass-panel rounded-3xl p-6 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-              <h4 className="text-xs font-bold tracking-widest text-slate-400 uppercase mb-4">Access Level</h4>
-              <div className="text-4xl font-light text-white mb-2">{user?.role === 'admin' ? 'Alpha' : 'Standard'}</div>
-              <p className="text-sm text-indigo-300">Clearance granted for standard operations.</p>
+            <div 
+              onClick={() => navigate('/editor')}
+              className="glass-panel rounded-3xl p-6 relative overflow-hidden group hover:-translate-y-1 hover:shadow-[0_10px_40px_rgba(99,102,241,0.2)] cursor-pointer transition-all duration-300 border border-indigo-500/20"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/20 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+              <h4 className="text-xs font-bold tracking-widest text-indigo-400 uppercase mb-4 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                Workspace
+              </h4>
+              <div className="text-3xl font-bold text-white mb-2">LaTeX Studio</div>
+              <p className="text-sm text-slate-400">Open real-time document editor</p>
             </div>
 
-            <div className="glass-panel rounded-3xl p-6 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300 flex-1 flex flex-col justify-between">
-               <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+            <div className="glass-panel rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between">
+               <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 rounded-bl-full -mr-4 -mt-4"></div>
               <h4 className="text-xs font-bold tracking-widest text-slate-400 uppercase mb-4">Connection</h4>
               <div>
                 <div className="flex items-end gap-2 mb-1">
