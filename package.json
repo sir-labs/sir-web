@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "pnpm run build && npx wrangler pages deploy --branch=main"
   },
   "dependencies": {
     "latex.js": "^0.12.6",
