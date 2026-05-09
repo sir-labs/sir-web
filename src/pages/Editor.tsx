@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocalStorage, useDebounceValue } from "usehooks-ts";
 import CodeMirror from "@uiw/react-codemirror";
+import { pdfjs } from "react-pdf";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PdfViewer } from "../components/PdfViewer";
 import { latexExtensions } from "../lib/latexLang";
@@ -84,6 +85,25 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function extractLatexError(log: string): string {
+  const lines = log.split("\n");
+  const errors: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    // Hard errors: lines starting with "! "
+    if (line.startsWith("! ")) {
+      const msg = line.slice(2).trim();
+      // grab context line (l.NN ...) if available
+      const ctx = lines[i + 1]?.trim() ?? "";
+      const loc = ctx.match(/^l\.(\d+)/) ? ` (line ${ctx.match(/^l\.(\d+)/)![1]})` : "";
+      errors.push(msg + loc);
+    }
+    // Package / LaTeX warnings treated as errors when fatal
+    if (line.includes("==> Fatal error")) break;
+  }
+  return errors[0] ?? "";
+}
+
 export default function Editor() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -105,6 +125,7 @@ export default function Editor() {
   const [engine, setEngine] = useState<Engine>("lualatex");
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [pdfVersion, setPdfVersion] = useState(0);
+  const [cacheStatus, setCacheStatus] = useState<string | null>(null);
 
   const [fileName, setFileName] = useState("untitled.tex");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -118,6 +139,16 @@ export default function Editor() {
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!exportOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [exportOpen]);
 
   useEffect(() => {
     if (!accessToken) navigate("/", { replace: true });
@@ -219,6 +250,7 @@ export default function Editor() {
     setStatus("compiling");
     setErrorMsg("");
     setCompileLog("");
+    setCacheStatus(null);
 
     try {
       const res = await fetch(`${BASE_URL}/api/compile`, {
@@ -234,12 +266,15 @@ export default function Editor() {
         const buf = await res.arrayBuffer();
         setPdfBytes(new Uint8Array(buf));
         setPdfVersion((v) => v + 1);
+        setCacheStatus(res.headers.get("X-Cache"));
         setStatus("done");
         setShowLog(false);
       } else {
         const data = await res.json();
-        setErrorMsg(data.error || "Compilation failed");
-        setCompileLog(data.log || "");
+        const log = data.log || "";
+        const parsed = extractLatexError(log);
+        setErrorMsg(parsed || data.error || "Compilation failed");
+        setCompileLog(log);
         setStatus("error");
       }
     } catch (e: unknown) {
@@ -298,7 +333,7 @@ export default function Editor() {
   // Ctrl+S / Cmd+S to save
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyS") {
         e.preventDefault();
         saveFile();
       }
@@ -306,6 +341,13 @@ export default function Editor() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [saveFile]);
+
+  // Auto-save when compile succeeds
+  const saveFileRef = useRef(saveFile);
+  useEffect(() => { saveFileRef.current = saveFile; }, [saveFile]);
+  useEffect(() => {
+    if (status === "done") saveFileRef.current();
+  }, [status]);
 
   const handleDownloadPdf = () => {
     if (!pdfBytes) return;
@@ -316,6 +358,32 @@ export default function Editor() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const handleExportImages = useCallback(async () => {
+    if (!pdfBytes) return;
+    const pdf = await pdfjs.getDocument({ data: pdfBytes.slice() }).promise;
+    const baseName = fileName.replace(/\.tex$/, "");
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
+      await new Promise<void>((resolve) => {
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(); return; }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = pdf.numPages === 1 ? `${baseName}.png` : `${baseName}_p${i}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+          resolve();
+        }, "image/png");
+      });
+    }
+  }, [pdfBytes, fileName]);
 
   const statusColor = {
     idle: "text-slate-400",
@@ -408,8 +476,9 @@ export default function Editor() {
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-3">
-          {/* Engine selector */}
+        <div className="flex items-center gap-2">
+
+          {/* Engine */}
           <select
             value={engine}
             onChange={(e) => setEngine(e.target.value as Engine)}
@@ -420,49 +489,57 @@ export default function Editor() {
             <option value="xelatex">XeLaTeX</option>
           </select>
 
-          {/* Compile status */}
-          <div
-            className={`neo-inset flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-xl ${statusColor}`}
-          >
-            {status === "compiling" && (
-              <span className="loading loading-spinner loading-xs" />
+          {/* Compile status + cache */}
+          <div className="neo-inset flex items-center gap-2 px-3 py-1.5 rounded-xl">
+            {status === "compiling" && <span className="loading loading-spinner loading-xs text-indigo-400" />}
+            {status === "done"      && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
+            {status === "error"     && <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />}
+            {status === "idle"      && <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />}
+            <span className={`text-xs font-bold ${statusColor}`}>{statusLabel}</span>
+
+            {status === "done" && cacheStatus === "CF-HIT" && (
+              <div className="relative group">
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700 text-[10px] font-semibold border border-cyan-200 cursor-default">
+                  Edge cached
+                </span>
+                <div className="pointer-events-none absolute top-full right-0 mt-2 w-52 rounded-lg bg-slate-800 text-white text-[10px] leading-relaxed px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                  <div className="absolute bottom-full right-4 border-4 border-transparent border-b-slate-800" />
+                  <p className="font-bold text-cyan-300 mb-0.5">Cloudflare Edge Cache</p>
+                  <p className="text-slate-300">PDF served from the nearest CF datacenter — no compilation needed.</p>
+                </div>
+              </div>
             )}
-            {status === "done" && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            {status === "done" && cacheStatus === "HIT" && (
+              <div className="relative group">
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold border border-blue-200 cursor-default">
+                  Cached
+                </span>
+                <div className="pointer-events-none absolute top-full right-0 mt-2 w-52 rounded-lg bg-slate-800 text-white text-[10px] leading-relaxed px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                  <div className="absolute bottom-full right-4 border-4 border-transparent border-b-slate-800" />
+                  <p className="font-bold text-blue-300 mb-0.5">R2 Object Storage Cache</p>
+                  <p className="text-slate-300">PDF retrieved from object storage — compilation was skipped.</p>
+                </div>
+              </div>
             )}
-            {status === "error" && (
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"
-                />
-              </svg>
-            )}
-            {statusLabel}
           </div>
 
-          {/* Assets toggle */}
+          {/* Divider */}
+          <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+          {/* Assets */}
           <button
             onClick={() => setAssetsOpen(v => !v)}
-            title="Uploaded Files"
-            className={`neo-btn neo-btn-soft flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+            className={`neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
               assetsOpen ? "bg-violet-100 text-violet-700 border border-violet-200" : "text-slate-600"
             }`}
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
-            Files
+            Assets
             {assets.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="min-w-[16px] h-4 px-1 rounded-full bg-violet-500 text-white text-[9px] font-bold flex items-center justify-center">
                 {assets.length > 9 ? "9+" : assets.length}
               </span>
             )}
@@ -472,78 +549,96 @@ export default function Editor() {
           <button
             onClick={saveFile}
             disabled={saveStatus === "saving"}
-            className={`neo-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors disabled:cursor-not-allowed ${
+            className={`neo-btn flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors disabled:cursor-not-allowed ${
               saveStatus === "saved"
                 ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                 : saveStatus === "error"
                   ? "bg-rose-100 text-rose-700 border border-rose-200"
-                  : "neo-btn-soft text-slate-700 disabled:opacity-50"
+                  : "neo-btn-soft text-slate-600 disabled:opacity-50"
             }`}
           >
-            {saveStatus === "saving" && (
-              <span className="loading loading-spinner loading-xs" />
-            )}
-            {saveStatus === "saved" && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            )}
-            {saveStatus === "idle" && (
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-                />
+            {saveStatus === "saving" && <span className="loading loading-spinner loading-xs" />}
+            {saveStatus === "saved"  && (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
               </svg>
             )}
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-                ? "Saved"
-                : saveStatus === "error"
-                  ? "Error"
-                  : "Save"}
+            {(saveStatus === "idle" || saveStatus === "error") && (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+            )}
+            {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
           </button>
 
-          {/* Download PDF */}
-          <button
-            onClick={handleDownloadPdf}
-            disabled={!pdfBytes}
-            className="neo-btn neo-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors border-0"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          {/* Export dropdown */}
+          <div ref={exportRef} className="relative">
+            <button
+              onClick={() => setExportOpen(v => !v)}
+              disabled={!pdfBytes}
+              className="neo-btn neo-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed border-0 transition-colors"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            Export PDF
-          </button>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export
+              <svg className={`w-3 h-3 transition-transform ${exportOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {exportOpen && (
+              <div className="absolute top-full right-0 mt-1.5 w-44 glass-panel border border-white/40 rounded-xl shadow-lg z-50 overflow-hidden py-1">
+                <button
+                  onClick={() => { handleDownloadPdf(); setExportOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <div>
+                    <div>Export as PDF</div>
+                    <div className="text-[10px] text-slate-400 font-normal">Original document</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { handleExportImages(); setExportOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <div>
+                    <div>Export as PNG</div>
+                    <div className="text-[10px] text-slate-400 font-normal">One image per page</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </header>
 
       {/* ─── Error banner ─── */}
       {status === "error" && errorMsg && (
-        <div className="neo-alert-error shrink-0 flex items-center justify-between px-6 py-2 text-xs font-mono rounded-none">
-          <span>⚠ {errorMsg}</span>
+        <div className="neo-alert-error shrink-0 flex items-center justify-between px-6 py-2.5 rounded-none gap-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg className="w-4 h-4 shrink-0 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+            </svg>
+            <span className="text-xs font-mono font-semibold truncate">{errorMsg}</span>
+          </div>
           {compileLog && (
             <button
               onClick={() => setShowLog((v) => !v)}
-              className="ml-4 underline underline-offset-2 hover:text-rose-300 transition-colors"
+              className="shrink-0 text-[11px] font-semibold underline underline-offset-2 hover:text-rose-300 transition-colors whitespace-nowrap"
             >
-              {showLog ? "Hide log" : "Show log"}
+              {showLog ? "Hide log" : "Full log"}
             </button>
           )}
         </div>
@@ -551,9 +646,26 @@ export default function Editor() {
 
       {/* ─── Compile log panel ─── */}
       {showLog && compileLog && (
-        <div className="neo-inset shrink-0 max-h-48 overflow-y-auto border-b border-rose-200 px-6 py-3 rounded-none">
+        <div className="neo-inset shrink-0 max-h-56 overflow-y-auto border-b border-rose-200 px-6 py-3 rounded-none">
           <pre className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap leading-relaxed">
-            {compileLog}
+            {compileLog.split("\n").map((line, i) => {
+              const isError = line.startsWith("! ");
+              const isFatal = line.includes("==> Fatal error");
+              return (
+                <span
+                  key={i}
+                  className={
+                    isError || isFatal
+                      ? "text-rose-600 font-bold"
+                      : line.startsWith("l.")
+                        ? "text-amber-600"
+                        : ""
+                  }
+                >
+                  {line + "\n"}
+                </span>
+              );
+            })}
           </pre>
         </div>
       )}
@@ -733,8 +845,8 @@ export default function Editor() {
               Preview
             </div>
 
-            {/* Compiling overlay */}
-            {status === "compiling" && (
+            {/* Compiling overlay — only show when no PDF yet (first compile) */}
+            {status === "compiling" && !pdfBytes && (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-100/80 backdrop-blur-sm gap-3">
                 <span className="loading loading-spinner loading-lg text-indigo-500" />
                 <p className="text-xs font-mono text-slate-500">
