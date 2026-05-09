@@ -90,10 +90,12 @@ export default function Editor() {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [engine, setEngine] = useState<Engine>("lualatex");
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const [pdfVersion, setPdfVersion] = useState(0);
 
   const [fileName, setFileName] = useState("untitled.tex");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [confirmNewDoc, setConfirmNewDoc] = useState(false);
+  const [editorLoading, setEditorLoading] = useState(!!fileId);
 
   useEffect(() => {
     if (!accessToken) navigate("/", { replace: true });
@@ -102,6 +104,7 @@ export default function Editor() {
   const loadFile = useCallback(
     async (id: string) => {
       if (!accessToken) return;
+      setEditorLoading(true);
       try {
         const res = await fetch(`${BASE_URL}/api/latex-files/${id}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -115,6 +118,8 @@ export default function Editor() {
         setDebouncedCode(data.content);
       } catch {
         /* ignore */
+      } finally {
+        setEditorLoading(false);
       }
     },
     [accessToken],
@@ -144,6 +149,7 @@ export default function Editor() {
       if (res.ok) {
         const buf = await res.arrayBuffer();
         setPdfBytes(new Uint8Array(buf));
+        setPdfVersion((v) => v + 1);
         setStatus("done");
         setShowLog(false);
       } else {
@@ -455,9 +461,18 @@ export default function Editor() {
           <div
               className={`glass-panel flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} border-r border-white/30 relative rounded-none`}
           >
-             <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-500 uppercase pointer-events-none z-10 select-none">
+            <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-500 uppercase pointer-events-none z-10 select-none">
               {fileName}
             </div>
+
+            {/* File loading overlay */}
+            {editorLoading && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/60 backdrop-blur-sm">
+                <span className="loading loading-spinner loading-md text-indigo-500" />
+                <p className="text-xs font-mono text-slate-500">Loading file…</p>
+              </div>
+            )}
+
             <div className="flex flex-1 overflow-hidden min-h-0">
               <CodeMirror
                 value={latexCode}
@@ -540,7 +555,7 @@ export default function Editor() {
             )}
 
             {pdfBytes && (
-              <PdfViewer data={pdfBytes} />
+              <PdfViewer key={pdfVersion} data={pdfBytes} />
             )}
           </div>
         )}
