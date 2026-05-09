@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useLocalStorage, useDebounceValue } from "usehooks-ts";
+import { useLocalStorage } from "usehooks-ts";
 import CodeMirror from "@uiw/react-codemirror";
+import type { EditorView } from "@codemirror/view";
 import { pdfjs } from "react-pdf";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PdfViewer } from "../components/PdfViewer";
@@ -12,6 +13,7 @@ const BASE_URL = import.meta.env.VITE_BASE_URL ?? "http://localhost:8787";
 const DEFAULT_LATEX = `\\documentclass{article}
 \\usepackage{amsmath}
 \\usepackage{amssymb}
+\\usepackage{graphicx}
 \\usepackage{fontspec}
 \\usepackage{babel}
 
@@ -66,7 +68,7 @@ $$\\left(\\begin{array}{cc} a & b \\\\ c & d \\end{array}\\right)$$
 
 \\end{document}`;
 
-type CompileStatus = "idle" | "compiling" | "done" | "error";
+type CompileStatus = "idle" | "stale" | "compiling" | "done" | "error";
 type ViewMode = "split" | "editor" | "preview";
 type Engine = "lualatex" | "pdflatex" | "xelatex";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -74,6 +76,7 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 interface UserAsset {
   id: string;
   name: string;
+  thumbnail_r2_key?: string;
   mime_type: string;
   size: number;
   created_at: number;
@@ -83,6 +86,83 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageAsset(asset: UserAsset): boolean {
+  const ext = asset.name.split(".").pop()?.toLowerCase() ?? "";
+  return asset.mime_type.startsWith("image/") || ["jpg", "jpeg", "png", "pdf", "eps", "svg"].includes(ext);
+}
+
+function getAssetReference(asset: UserAsset): string {
+  return isImageAsset(asset)
+    ? `\\includegraphics[width=\\linewidth]{${asset.name}}`
+    : asset.name;
+}
+
+async function createImageThumbnail(file: File): Promise<Blob | null> {
+  if (!file.type.startsWith("image/")) return null;
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("thumbnail image load failed"));
+    });
+    image.src = sourceUrl;
+    await loaded;
+
+    const maxSize = 220;
+    const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d")?.drawImage(image, 0, 0, width, height);
+
+    return await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/webp", 0.72);
+    });
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+function ensureGraphicxPackage(source: string): { source: string; insertedLength: number } {
+  if (/\\usepackage(?:\[[^\]]*\])?\{[^}]*\bgraphicx\b[^}]*\}/.test(source)) {
+    return { source, insertedLength: 0 };
+  }
+
+  const packageLine = "\\usepackage{graphicx}\n";
+  const usePackageMatches = [...source.matchAll(/^\\usepackage(?:\[[^\]]*\])?\{[^}]+\}\s*$/gm)];
+  const lastUsePackage = usePackageMatches.at(-1);
+
+  if (lastUsePackage?.index !== undefined) {
+    const insertAt = lastUsePackage.index + lastUsePackage[0].length;
+    const prefix = source[insertAt - 1] === "\n" ? "" : "\n";
+    const insertion = `${prefix}${packageLine}`;
+    return {
+      source: source.slice(0, insertAt) + insertion + source.slice(insertAt),
+      insertedLength: insertion.length,
+    };
+  }
+
+  const documentClass = source.match(/^\\documentclass(?:\[[^\]]*\])?\{[^}]+\}\s*$/m);
+  if (documentClass?.index !== undefined) {
+    const insertAt = documentClass.index + documentClass[0].length;
+    const prefix = source[insertAt - 1] === "\n" ? "" : "\n";
+    const insertion = `${prefix}${packageLine}`;
+    return {
+      source: source.slice(0, insertAt) + insertion + source.slice(insertAt),
+      insertedLength: insertion.length,
+    };
+  }
+
+  return { source: packageLine + source, insertedLength: packageLine.length };
 }
 
 function extractLatexError(log: string): string {
@@ -112,10 +192,6 @@ export default function Editor() {
   const [accessToken] = useLocalStorage<string | null>("access_token", null);
 
   const [latexCode, setLatexCode] = useState(fileId ? "" : DEFAULT_LATEX);
-  const [debouncedCode, setDebouncedCode] = useDebounceValue(
-    fileId ? "" : DEFAULT_LATEX,
-    800,
-  );
 
   const [status, setStatus] = useState<CompileStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -138,7 +214,14 @@ export default function Editor() {
   const [uploadingAsset, setUploadingAsset] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
+  const [assetPreviewUrls, setAssetPreviewUrls] = useState<Record<string, string>>({});
+  const [hoveredAsset, setHoveredAsset] = useState<UserAsset | null>(null);
+  const [hoverPreviewPosition, setHoverPreviewPosition] = useState({ x: 0, y: 0 });
+  const [selectedAsset, setSelectedAsset] = useState<UserAsset | null>(null);
+  const [selectedAssetUrl, setSelectedAssetUrl] = useState<string | null>(null);
+  const [selectedAssetLoading, setSelectedAssetLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -149,6 +232,13 @@ export default function Editor() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [exportOpen]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(assetPreviewUrls).forEach(URL.revokeObjectURL);
+      if (selectedAssetUrl) URL.revokeObjectURL(selectedAssetUrl);
+    };
+  }, [assetPreviewUrls, selectedAssetUrl]);
 
   useEffect(() => {
     if (!accessToken) navigate("/", { replace: true });
@@ -168,7 +258,8 @@ export default function Editor() {
         setEngine(data.engine as Engine);
         setPdfBytes(null);
         setLatexCode(data.content);
-        setDebouncedCode(data.content);
+        setStatus("stale");
+        setCacheStatus(null);
       } catch {
         /* ignore */
       } finally {
@@ -200,22 +291,108 @@ export default function Editor() {
     if (assetsOpen && assets.length === 0) fetchAssets();
   }, [assetsOpen, assets.length, fetchAssets]);
 
+  useEffect(() => {
+    if (!accessToken || assets.length === 0) {
+      setAssetPreviewUrls(prev => {
+        Object.values(prev).forEach(URL.revokeObjectURL);
+        return {};
+      });
+      return;
+    }
+
+    let cancelled = false;
+    const urls: Record<string, string> = {};
+    const previewAssets = assets.filter(asset => isImageAsset(asset) && asset.thumbnail_r2_key);
+
+    Promise.all(previewAssets.map(async (asset) => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/assets/${asset.id}/preview`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) return;
+        urls[asset.id] = URL.createObjectURL(await res.blob());
+      } catch {
+        /* ignore preview load failures */
+      }
+    })).then(() => {
+      if (cancelled) {
+        Object.values(urls).forEach(URL.revokeObjectURL);
+        return;
+      }
+      setAssetPreviewUrls(prev => {
+        Object.values(prev).forEach(URL.revokeObjectURL);
+        return urls;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, assets]);
+
+  useEffect(() => {
+    if (!selectedAsset || !accessToken) {
+      setSelectedAssetUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedAssetLoading(true);
+    fetch(`${BASE_URL}/api/assets/${selectedAsset.id}/content`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("asset load failed");
+        const url = URL.createObjectURL(await res.blob());
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setSelectedAssetUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedAssetUrl(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSelectedAssetLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAsset, accessToken]);
+
   const handleAssetUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !accessToken) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0 || !accessToken) return;
     e.target.value = "";
     setUploadingAsset(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`${BASE_URL}/api/assets`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: form,
-      });
-      if (!res.ok) return;
-      const asset: UserAsset = await res.json();
-      setAssets(prev => [asset, ...prev]);
+      const uploadedAssets: UserAsset[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        const thumbnail = await createImageThumbnail(file);
+        if (thumbnail) {
+          form.append("thumbnail", thumbnail, `${file.name}.preview.webp`);
+        }
+        const res = await fetch(`${BASE_URL}/api/assets`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: form,
+        });
+        if (!res.ok) continue;
+        uploadedAssets.push(await res.json());
+      }
+      if (uploadedAssets.length > 0) {
+        setAssets(prev => [...uploadedAssets, ...prev]);
+      }
     } catch { /* ignore */ }
     finally { setUploadingAsset(false); }
   }, [accessToken]);
@@ -229,23 +406,80 @@ export default function Editor() {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       setAssets(prev => prev.filter(a => a.id !== asset.id));
+      if (selectedAsset?.id === asset.id) setSelectedAsset(null);
     } catch { /* ignore */ }
     finally { setDeletingAssetId(null); }
-  }, [accessToken]);
+  }, [accessToken, selectedAsset]);
+
+  const insertAssetRef = useCallback((asset: UserAsset, position?: number) => {
+    const ref = getAssetReference(asset);
+    const view = editorViewRef.current;
+    const currentCode = view?.state.doc.toString() ?? latexCode;
+    const packageResult = isImageAsset(asset)
+      ? ensureGraphicxPackage(currentCode)
+      : { source: currentCode, insertedLength: 0 };
+    const from = position ?? view?.state.selection.main.from ?? packageResult.source.length;
+    const adjustedFrom = from + packageResult.insertedLength;
+    const needsLeadingBreak = adjustedFrom > 0 && !/\s$/.test(packageResult.source[adjustedFrom - 1] ?? "");
+    const needsTrailingBreak = !/^\s/.test(packageResult.source[adjustedFrom] ?? "");
+    const insertion = `${needsLeadingBreak ? "\n" : ""}${ref}${needsTrailingBreak ? "\n" : ""}`;
+
+    if (view) {
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert:
+            packageResult.source.slice(0, adjustedFrom) +
+            insertion +
+            packageResult.source.slice(adjustedFrom),
+        },
+        selection: { anchor: adjustedFrom + insertion.length },
+      });
+      view.focus();
+      return;
+    }
+
+    const nextCode =
+      packageResult.source.slice(0, adjustedFrom) +
+      insertion +
+      packageResult.source.slice(adjustedFrom);
+    setLatexCode(nextCode);
+    setStatus("stale");
+    setCacheStatus(null);
+  }, [latexCode]);
+
+  const handleEditorDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    const assetRaw = event.dataTransfer.getData("application/x-sir-asset");
+    if (!assetRaw) return;
+    event.preventDefault();
+
+    try {
+      const asset = JSON.parse(assetRaw) as UserAsset;
+      const view = editorViewRef.current;
+      const position = view?.posAtCoords({ x: event.clientX, y: event.clientY }) ?? undefined;
+      insertAssetRef(asset, position);
+    } catch {
+      /* ignore invalid drag payload */
+    }
+  }, [insertAssetRef]);
+
+  const handleAssetDragStart = useCallback((event: React.DragEvent<HTMLDivElement>, asset: UserAsset) => {
+    const ref = getAssetReference(asset);
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/x-sir-asset", JSON.stringify(asset));
+    event.dataTransfer.setData("text/plain", ref);
+  }, []);
 
   const copyAssetRef = useCallback((asset: UserAsset) => {
-    const ext = asset.name.split(".").pop()?.toLowerCase() ?? "";
-    const isImage = ["jpg", "jpeg", "png", "pdf", "eps", "svg"].includes(ext);
-    const ref = isImage
-      ? `\\includegraphics{${asset.name}}`
-      : asset.name;
+    const ref = getAssetReference(asset);
     navigator.clipboard.writeText(ref);
     setCopiedAssetId(asset.id);
     setTimeout(() => setCopiedAssetId(null), 1500);
   }, []);
 
-  const compile = useCallback(async () => {
-    if (!debouncedCode.trim() || !accessToken) return;
+  const compile = useCallback(async (source = latexCode) => {
+    if (!source.trim() || !accessToken) return false;
 
     setStatus("compiling");
     setErrorMsg("");
@@ -259,7 +493,7 @@ export default function Editor() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ source: debouncedCode, engine }),
+        body: JSON.stringify({ source, engine }),
       });
 
       if (res.ok) {
@@ -269,6 +503,7 @@ export default function Editor() {
         setCacheStatus(res.headers.get("X-Cache"));
         setStatus("done");
         setShowLog(false);
+        return true;
       } else {
         const data = await res.json();
         const log = data.log || "";
@@ -276,16 +511,14 @@ export default function Editor() {
         setErrorMsg(parsed || data.error || "Compilation failed");
         setCompileLog(log);
         setStatus("error");
+        return false;
       }
     } catch (e: unknown) {
       setErrorMsg((e as Error).message || "Network error");
       setStatus("error");
+      return false;
     }
-  }, [debouncedCode, engine, accessToken]);
-
-  useEffect(() => {
-    compile();
-  }, [compile]);
+  }, [latexCode, engine, accessToken]);
 
   const saveFile = useCallback(async () => {
     if (saveStatus === "saving" || !accessToken) return;
@@ -315,6 +548,7 @@ export default function Editor() {
         setSearchParams({ id: data.id }, { replace: true });
       }
       setSaveStatus("saved");
+      await compile(latexCode);
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch {
       setSaveStatus("error");
@@ -328,6 +562,7 @@ export default function Editor() {
     latexCode,
     engine,
     setSearchParams,
+    compile,
   ]);
 
   // Ctrl+S / Cmd+S to save
@@ -342,16 +577,13 @@ export default function Editor() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [saveFile]);
 
-  // Auto-save when compile succeeds
-  const saveFileRef = useRef(saveFile);
-  useEffect(() => { saveFileRef.current = saveFile; }, [saveFile]);
-  useEffect(() => {
-    if (status === "done") saveFileRef.current();
-  }, [status]);
-
   const handleDownloadPdf = () => {
     if (!pdfBytes) return;
-    const url = URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
+    const pdfBuffer = pdfBytes.buffer.slice(
+      pdfBytes.byteOffset,
+      pdfBytes.byteOffset + pdfBytes.byteLength,
+    ) as ArrayBuffer;
+    const url = URL.createObjectURL(new Blob([pdfBuffer], { type: "application/pdf" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = fileName.replace(/\.tex$/, "") + ".pdf";
@@ -369,7 +601,7 @@ export default function Editor() {
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
+      await page.render({ canvas, canvasContext: canvas.getContext("2d")!, viewport }).promise;
       await new Promise<void>((resolve) => {
         canvas.toBlob((blob) => {
           if (!blob) { resolve(); return; }
@@ -387,6 +619,7 @@ export default function Editor() {
 
   const statusColor = {
     idle: "text-slate-400",
+    stale: "text-amber-500",
     compiling: "text-indigo-400",
     done: "text-emerald-400",
     error: "text-rose-400",
@@ -394,6 +627,7 @@ export default function Editor() {
 
   const statusLabel = {
     idle: "Ready",
+    stale: "Not compiled",
     compiling: "Compiling...",
     done: "Compiled",
     error: "Error",
@@ -481,7 +715,11 @@ export default function Editor() {
           {/* Engine */}
           <select
             value={engine}
-            onChange={(e) => setEngine(e.target.value as Engine)}
+            onChange={(e) => {
+              setEngine(e.target.value as Engine);
+              setStatus("stale");
+              setCacheStatus(null);
+            }}
             className="neo-select px-3 py-1.5 rounded-xl text-slate-700 text-xs font-mono cursor-pointer"
           >
             <option value="lualatex">LuaLaTeX</option>
@@ -494,6 +732,7 @@ export default function Editor() {
             {status === "compiling" && <span className="loading loading-spinner loading-xs text-indigo-400" />}
             {status === "done"      && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
             {status === "error"     && <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />}
+            {status === "stale"     && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
             {status === "idle"      && <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />}
             <span className={`text-xs font-bold ${statusColor}`}>{statusLabel}</span>
 
@@ -525,6 +764,25 @@ export default function Editor() {
 
           {/* Divider */}
           <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+          {/* Compile */}
+          <button
+            onClick={() => compile(latexCode)}
+            disabled={status === "compiling" || saveStatus === "saving"}
+            className="neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {status === "compiling" ? (
+              <span className="loading loading-spinner loading-xs" />
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M14.752 11.168l-5.197-3.027A1 1 0 008 9.006v5.988a1 1 0 001.555.832l5.197-2.961a1 1 0 000-1.697z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            Compile
+          </button>
 
           {/* Assets */}
           <button
@@ -670,119 +928,19 @@ export default function Editor() {
         </div>
       )}
 
-      {/* ─── Assets Panel ─── */}
-      {assetsOpen && (
-        <div className="glass-panel shrink-0 border-b border-white/30 px-4 py-3 rounded-none">
-          <div className="max-w-full flex items-start gap-3">
-            {/* Upload button */}
-            <div className="shrink-0">
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleAssetUpload}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingAsset}
-                className="neo-btn neo-btn-soft flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-violet-600 disabled:opacity-50"
-              >
-                {uploadingAsset ? (
-                  <span className="loading loading-spinner loading-xs" />
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                )}
-                Upload
-              </button>
-            </div>
-
-            {/* Assets list */}
-            <div className="flex-1 min-w-0">
-              {assetsLoading && (
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span className="loading loading-spinner loading-xs" />
-                  Loading files…
-                </div>
-              )}
-              {!assetsLoading && assets.length === 0 && (
-                <p className="text-xs text-slate-400">No files uploaded yet. Upload images or resources to reference in your LaTeX code.</p>
-              )}
-              {assets.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {assets.map(asset => (
-                    <div key={asset.id}
-                      className="neo-inset flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs group">
-                      <svg className="w-3.5 h-3.5 text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                      </svg>
-                      <span className="font-mono text-slate-700 max-w-[120px] truncate" title={asset.name}>
-                        {asset.name}
-                      </span>
-                      <span className="text-slate-400">{formatBytes(asset.size)}</span>
-                      <button
-                        onClick={() => copyAssetRef(asset)}
-                        title="Copy reference"
-                        className="text-slate-400 hover:text-violet-600 transition-colors"
-                      >
-                        {copiedAssetId === asset.id ? (
-                          <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleAssetDelete(asset)}
-                        disabled={deletingAssetId === asset.id}
-                        title="Delete"
-                        className="text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-50"
-                      >
-                        {deletingAssetId === asset.id ? (
-                          <span className="loading loading-spinner loading-xs" />
-                        ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                  d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {assets.length > 0 && (
-                <p className="text-[10px] text-slate-400 mt-2">
-                  Click the copy icon to copy a LaTeX reference (e.g. <code className="font-mono">\includegraphics&#123;name.jpg&#125;</code>) to clipboard.
-                </p>
-              )}
-            </div>
-
-            {/* Refresh */}
-            <button onClick={fetchAssets} disabled={assetsLoading}
-              className="shrink-0 neo-btn neo-btn-soft w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 disabled:opacity-40">
-              <svg className={`w-3.5 h-3.5 ${assetsLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ─── Panes ─── */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Editor Pane */}
         {(viewMode === "split" || viewMode === "editor") && (
           <div
               className={`glass-panel flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} border-r border-white/30 relative rounded-none`}
+              onDragOver={(event) => {
+                if (Array.from(event.dataTransfer.types).includes("application/x-sir-asset")) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                }
+              }}
+              onDrop={handleEditorDrop}
           >
             <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-500 uppercase pointer-events-none z-10 select-none">
               {fileName}
@@ -802,9 +960,13 @@ export default function Editor() {
                 height="100%"
                 style={{ flex: 1, overflow: "hidden" }}
                 extensions={latexExtensions}
+                onCreateEditor={(view) => {
+                  editorViewRef.current = view;
+                }}
                 onChange={(value) => {
                   setLatexCode(value);
-                  setDebouncedCode(value);
+                  setStatus("stale");
+                  setCacheStatus(null);
                 }}
                 basicSetup={{
                   lineNumbers: true,
@@ -882,7 +1044,248 @@ export default function Editor() {
             )}
           </div>
         )}
+
+        {/* Assets Sidebar */}
+        {assetsOpen && (
+          <aside className="glass-panel flex w-80 max-w-[36vw] shrink-0 flex-col border-l border-white/30 rounded-none">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/30 px-4 py-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-700">Assets</span>
+                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                    {assets.length}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[10px] font-mono text-slate-400">
+                  Drag into editor or click file name
+                </div>
+              </div>
+              <button
+                onClick={() => setAssetsOpen(false)}
+                title="Close assets"
+                className="neo-btn neo-btn-soft flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2 border-b border-white/30 px-4 py-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleAssetUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAsset}
+                className="neo-btn neo-btn-soft flex h-8 flex-1 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-violet-600 disabled:opacity-50"
+              >
+                {uploadingAsset ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                )}
+                Upload
+              </button>
+              <button
+                onClick={fetchAssets}
+                disabled={assetsLoading}
+                title="Refresh assets"
+                className="neo-btn neo-btn-soft flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 disabled:opacity-40"
+              >
+                <svg className={`h-3.5 w-3.5 ${assetsLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto overflow-x-visible px-3 py-3">
+              {assetsLoading && (
+                <div className="flex items-center gap-2 px-2 py-3 text-xs text-slate-400">
+                  <span className="loading loading-spinner loading-xs" />
+                  Loading files...
+                </div>
+              )}
+              {!assetsLoading && assets.length === 0 && (
+                <div className="neo-inset flex h-28 items-center justify-center rounded-lg text-xs text-slate-400">
+                  No assets uploaded
+                </div>
+              )}
+              {assets.length > 0 && (
+                <div className="space-y-2">
+                  {assets.map(asset => (
+                    <div
+                      key={asset.id}
+                      draggable
+                      onDragStart={(event) => handleAssetDragStart(event, asset)}
+                      onDoubleClick={() => insertAssetRef(asset)}
+                      onMouseEnter={(event) => {
+                        if (!assetPreviewUrls[asset.id]) return;
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setHoverPreviewPosition({ x: rect.left - 12, y: rect.top + rect.height / 2 });
+                        setHoveredAsset(asset);
+                      }}
+                      onMouseMove={(event) => {
+                        if (!assetPreviewUrls[asset.id]) return;
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setHoverPreviewPosition({ x: rect.left - 12, y: rect.top + rect.height / 2 });
+                      }}
+                      onMouseLeave={() => setHoveredAsset(null)}
+                      className="neo-inset group relative grid cursor-grab grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2.5 py-2 text-xs active:cursor-grabbing"
+                      title={asset.name}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => isImageAsset(asset) && setSelectedAsset(asset)}
+                        disabled={!isImageAsset(asset)}
+                        className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border ${
+                        isImageAsset(asset)
+                          ? "border-violet-200 bg-violet-100 text-violet-600"
+                          : "border-slate-200 bg-white/10 text-slate-500"
+                      }`}>
+                        {assetPreviewUrls[asset.id] ? (
+                          <img
+                            src={assetPreviewUrls[asset.id]}
+                            alt={asset.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : isImageAsset(asset) ? (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertAssetRef(asset)}
+                        className="min-w-0 text-left"
+                        title="Insert"
+                      >
+                        <div className="truncate font-mono font-semibold text-slate-700">{asset.name}</div>
+                        <div className="truncate text-[10px] text-slate-400">
+                          {isImageAsset(asset) ? "image" : "file"} - {formatBytes(asset.size)}
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-1 opacity-80 transition-opacity group-hover:opacity-100">
+                        <button
+                          onClick={() => copyAssetRef(asset)}
+                          title="Copy reference"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-violet-100 hover:text-violet-600"
+                        >
+                          {copiedAssetId === asset.id ? (
+                            <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleAssetDelete(asset)}
+                          disabled={deletingAssetId === asset.id}
+                          title="Delete"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-500 disabled:opacity-50"
+                        >
+                          {deletingAssetId === asset.id ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
       </div>
+
+      {selectedAsset && isImageAsset(selectedAsset) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-5 backdrop-blur-sm"
+          onClick={() => setSelectedAsset(null)}
+        >
+          <div
+            className="glass-panel flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/20"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/20 px-4 py-3">
+              <div className="min-w-0">
+                <div className="truncate font-mono text-sm font-bold text-slate-100">{selectedAsset.name}</div>
+                <div className="text-[10px] text-slate-400">{selectedAsset.mime_type} - {formatBytes(selectedAsset.size)}</div>
+              </div>
+              <button
+                onClick={() => setSelectedAsset(null)}
+                title="Close preview"
+                className="neo-btn neo-btn-soft flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-300"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex min-h-[18rem] flex-1 items-center justify-center overflow-auto bg-slate-950/40 p-4">
+              {selectedAssetLoading && (
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <span className="loading loading-spinner loading-sm" />
+                  Loading image...
+                </div>
+              )}
+              {!selectedAssetLoading && selectedAssetUrl && (
+                <img
+                  src={selectedAssetUrl}
+                  alt={selectedAsset.name}
+                  className="max-h-[76vh] max-w-full object-contain"
+                />
+              )}
+              {!selectedAssetLoading && !selectedAssetUrl && (
+                <div className="text-xs text-slate-400">Preview unavailable</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hoveredAsset && assetPreviewUrls[hoveredAsset.id] && !selectedAsset && (
+        <div
+          className="pointer-events-none fixed z-[60] w-52 rounded-lg border border-white/20 bg-slate-950/90 p-2 shadow-2xl backdrop-blur-md"
+          style={{
+            left: hoverPreviewPosition.x,
+            top: hoverPreviewPosition.y,
+            transform: "translate(-100%, -50%)",
+          }}
+        >
+          <img
+            src={assetPreviewUrls[hoveredAsset.id]}
+            alt={hoveredAsset.name}
+            className="h-36 w-full rounded-md bg-slate-900 object-contain"
+          />
+          <div className="mt-2 truncate font-mono text-[10px] font-semibold text-slate-100">
+            {hoveredAsset.name}
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmNewDoc}
@@ -894,8 +1297,9 @@ export default function Editor() {
           setSearchParams({}, { replace: true });
           setFileName("untitled.tex");
           setLatexCode(DEFAULT_LATEX);
-          setDebouncedCode(DEFAULT_LATEX);
           setPdfBytes(null);
+          setStatus("stale");
+          setCacheStatus(null);
         }}
         onCancel={() => setConfirmNewDoc(false)}
       />
