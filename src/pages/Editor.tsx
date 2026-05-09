@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocalStorage, useDebounceValue } from "usehooks-ts";
+import CodeMirror from "@uiw/react-codemirror";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PdfViewer } from "../components/PdfViewer";
+import { latexExtensions } from "../lib/latexLang";
 
 const BASE_URL = import.meta.env.VITE_BASE_URL ?? "http://localhost:8787";
 
@@ -86,14 +89,11 @@ export default function Editor() {
   const [showLog, setShowLog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [engine, setEngine] = useState<Engine>("lualatex");
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
 
   const [fileName, setFileName] = useState("untitled.tex");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [confirmNewDoc, setConfirmNewDoc] = useState(false);
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const pdfUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) navigate("/", { replace: true });
@@ -110,9 +110,7 @@ export default function Editor() {
         const data = await res.json();
         setFileName(data.name);
         setEngine(data.engine as Engine);
-        if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-        pdfUrlRef.current = null;
-        setPdfUrl(null);
+        setPdfBytes(null);
         setLatexCode(data.content);
         setDebouncedCode(data.content);
       } catch {
@@ -144,11 +142,8 @@ export default function Editor() {
       });
 
       if (res.ok) {
-        const blob = await res.blob();
-        if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-        const url = URL.createObjectURL(blob);
-        pdfUrlRef.current = url;
-        setPdfUrl(url);
+        const buf = await res.arrayBuffer();
+        setPdfBytes(new Uint8Array(buf));
         setStatus("done");
         setShowLog(false);
       } else {
@@ -166,12 +161,6 @@ export default function Editor() {
   useEffect(() => {
     compile();
   }, [compile]);
-
-  useEffect(() => {
-    return () => {
-      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-    };
-  }, []);
 
   const saveFile = useCallback(async () => {
     if (saveStatus === "saving" || !accessToken) return;
@@ -229,27 +218,13 @@ export default function Editor() {
   }, [saveFile]);
 
   const handleDownloadPdf = () => {
-    if (!pdfUrl) return;
+    if (!pdfBytes) return;
+    const url = URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
     const a = document.createElement("a");
-    a.href = pdfUrl;
+    a.href = url;
     a.download = fileName.replace(/\.tex$/, "") + ".pdf";
     a.click();
-  };
-
-  const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== "Tab") return;
-    e.preventDefault();
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const newVal =
-      latexCode.substring(0, start) + "  " + latexCode.substring(end);
-    setLatexCode(newVal);
-    setDebouncedCode(newVal);
-    setTimeout(() => {
-      ta.selectionStart = ta.selectionEnd = start + 2;
-    }, 0);
+    URL.revokeObjectURL(url);
   };
 
   const statusColor = {
@@ -428,7 +403,7 @@ export default function Editor() {
           {/* Download PDF */}
           <button
             onClick={handleDownloadPdf}
-            disabled={!pdfUrl}
+            disabled={!pdfBytes}
             className="neo-btn neo-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors border-0"
           >
             <svg
@@ -484,24 +459,40 @@ export default function Editor() {
               {fileName}
             </div>
             <div className="flex flex-1 overflow-hidden min-h-0">
-              {/* Line numbers */}
-              <div className="select-none text-right text-slate-500 font-mono text-xs py-6 pl-4 pr-3 leading-relaxed bg-white/40 border-r border-white/20 min-w-[3rem] overflow-hidden">
-                {latexCode.split("\n").map((_, i) => (
-                  <div key={i}>{i + 1}</div>
-                ))}
-              </div>
-              <textarea
-                ref={textareaRef}
-                id="latex-source-editor"
-                name="latex-source"
+              <CodeMirror
                 value={latexCode}
-                onChange={(e) => {
-                  setLatexCode(e.target.value);
-                  setDebouncedCode(e.target.value);
+                height="100%"
+                style={{ flex: 1, overflow: "hidden" }}
+                extensions={latexExtensions}
+                onChange={(value) => {
+                  setLatexCode(value);
+                  setDebouncedCode(value);
                 }}
-                onKeyDown={handleTabKey}
-                spellCheck={false}
-                className="neo-textarea flex-1 p-6 bg-transparent text-slate-700 font-mono text-sm leading-relaxed focus:outline-none resize-none overflow-auto scrollbar-thin border-0 rounded-none"
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLineGutter: true,
+                  highlightSpecialChars: false,
+                  history: true,
+                  foldGutter: false,
+                  drawSelection: true,
+                  dropCursor: false,
+                  allowMultipleSelections: false,
+                  indentOnInput: false,
+                  bracketMatching: false,
+                  closeBrackets: false,
+                  autocompletion: false,
+                  rectangularSelection: false,
+                  crosshairCursor: false,
+                  highlightActiveLine: true,
+                  highlightSelectionMatches: false,
+                  closeBracketsKeymap: false,
+                  defaultKeymap: true,
+                  searchKeymap: false,
+                  historyKeymap: true,
+                  foldKeymap: false,
+                  completionKeymap: false,
+                  lintKeymap: false,
+                }}
               />
             </div>
           </div>
@@ -527,7 +518,7 @@ export default function Editor() {
             )}
 
             {/* Empty state */}
-            {!pdfUrl && status !== "compiling" && (
+            {!pdfBytes && status !== "compiling" && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 pointer-events-none">
                 <svg
                   className="w-10 h-10 text-slate-300"
@@ -548,24 +539,12 @@ export default function Editor() {
               </div>
             )}
 
-            {pdfUrl && (
-              <iframe
-                key={pdfUrl}
-                src={pdfUrl}
-                title="LaTeX Preview"
-                className="w-full h-full border-none"
-              />
+            {pdfBytes && (
+              <PdfViewer data={pdfBytes} />
             )}
           </div>
         )}
       </div>
-
-      <style>{`
-        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
-      `}</style>
 
       <ConfirmDialog
         open={confirmNewDoc}
@@ -578,9 +557,7 @@ export default function Editor() {
           setFileName("untitled.tex");
           setLatexCode(DEFAULT_LATEX);
           setDebouncedCode(DEFAULT_LATEX);
-          setPdfUrl(null);
-          if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-          pdfUrlRef.current = null;
+          setPdfBytes(null);
         }}
         onCancel={() => setConfirmNewDoc(false)}
       />
