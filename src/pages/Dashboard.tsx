@@ -51,6 +51,8 @@ export default function Dashboard() {
   const [filesError, setFilesError]   = useState("");
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<LatexFile | null>(null);
+  const [renamingId, setRenamingId]   = useState<string | null>(null);
+  const [renamingVal, setRenamingVal] = useState("");
 
   const handleLogout = useCallback(() => {
     setAccessToken(null);
@@ -100,6 +102,28 @@ export default function Dashboard() {
   useEffect(() => {
     if (accessToken) fetchLatexFiles();
   }, [accessToken, fetchLatexFiles]);
+
+  const startRename = (file: LatexFile) => {
+    setRenamingId(file.id);
+    setRenamingVal(file.name);
+  };
+
+  const commitRename = async (file: LatexFile) => {
+    const name = renamingVal.trim();
+    setRenamingId(null);
+    if (!name || name === file.name || !accessToken) return;
+    try {
+      const res = await fetch(`${BASE_URL}/api/latex-files/${file.id}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      setFiles(prev => prev.map(f => f.id === file.id ? { ...f, name } : f));
+    } catch {
+      setFilesError("Failed to rename file.");
+    }
+  };
 
   const handleDeleteFile = async (file: LatexFile) => {
     if (!accessToken) return;
@@ -360,10 +384,24 @@ export default function Dashboard() {
                               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-700 truncate leading-snug" title={file.name}>
-                        {file.name}
-                      </p>
+                    <div className="min-w-0 flex-1">
+                      {renamingId === file.id ? (
+                        <input
+                          autoFocus
+                          value={renamingVal}
+                          onChange={e => setRenamingVal(e.target.value)}
+                          onBlur={() => commitRename(file)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") commitRename(file);
+                            if (e.key === "Escape") setRenamingId(null);
+                          }}
+                          className="w-full text-sm font-semibold text-slate-700 bg-white border border-indigo-300 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      ) : (
+                        <p className="text-sm font-semibold text-slate-700 truncate leading-snug" title={file.name}>
+                          {file.name}
+                        </p>
+                      )}
                       <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
                         #{file.id}
                       </p>
@@ -385,6 +423,14 @@ export default function Dashboard() {
                               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                       Open
+                    </button>
+                    <button onClick={() => startRename(file)}
+                      title="Rename"
+                      className="neo-btn w-8 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200 flex items-center justify-center">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                              d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+                      </svg>
                     </button>
                     <button onClick={() => setPendingDelete(file)}
                       disabled={deletingId === file.id}

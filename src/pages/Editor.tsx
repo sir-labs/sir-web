@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocalStorage, useDebounceValue } from "usehooks-ts";
 import CodeMirror from "@uiw/react-codemirror";
@@ -70,6 +70,20 @@ type ViewMode = "split" | "editor" | "preview";
 type Engine = "lualatex" | "pdflatex" | "xelatex";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+interface UserAsset {
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  created_at: number;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function Editor() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -96,6 +110,14 @@ export default function Editor() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [confirmNewDoc, setConfirmNewDoc] = useState(false);
   const [editorLoading, setEditorLoading] = useState(!!fileId);
+
+  const [assetsOpen, setAssetsOpen] = useState(false);
+  const [assets, setAssets] = useState<UserAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [uploadingAsset, setUploadingAsset] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!accessToken) navigate("/", { replace: true });
@@ -128,6 +150,68 @@ export default function Editor() {
   useEffect(() => {
     if (fileId) loadFile(fileId);
   }, [fileId, loadFile]);
+
+  const fetchAssets = useCallback(async () => {
+    if (!accessToken) return;
+    setAssetsLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/assets`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAssets(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+    finally { setAssetsLoading(false); }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (assetsOpen && assets.length === 0) fetchAssets();
+  }, [assetsOpen, assets.length, fetchAssets]);
+
+  const handleAssetUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !accessToken) return;
+    e.target.value = "";
+    setUploadingAsset(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${BASE_URL}/api/assets`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+      });
+      if (!res.ok) return;
+      const asset: UserAsset = await res.json();
+      setAssets(prev => [asset, ...prev]);
+    } catch { /* ignore */ }
+    finally { setUploadingAsset(false); }
+  }, [accessToken]);
+
+  const handleAssetDelete = useCallback(async (asset: UserAsset) => {
+    if (!accessToken) return;
+    setDeletingAssetId(asset.id);
+    try {
+      await fetch(`${BASE_URL}/api/assets/${asset.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      setAssets(prev => prev.filter(a => a.id !== asset.id));
+    } catch { /* ignore */ }
+    finally { setDeletingAssetId(null); }
+  }, [accessToken]);
+
+  const copyAssetRef = useCallback((asset: UserAsset) => {
+    const ext = asset.name.split(".").pop()?.toLowerCase() ?? "";
+    const isImage = ["jpg", "jpeg", "png", "pdf", "eps", "svg"].includes(ext);
+    const ref = isImage
+      ? `\\includegraphics{${asset.name}}`
+      : asset.name;
+    navigator.clipboard.writeText(ref);
+    setCopiedAssetId(asset.id);
+    setTimeout(() => setCopiedAssetId(null), 1500);
+  }, []);
 
   const compile = useCallback(async () => {
     if (!debouncedCode.trim() || !accessToken) return;
@@ -364,6 +448,26 @@ export default function Editor() {
             {statusLabel}
           </div>
 
+          {/* Assets toggle */}
+          <button
+            onClick={() => setAssetsOpen(v => !v)}
+            title="Uploaded Files"
+            className={`neo-btn neo-btn-soft flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+              assetsOpen ? "bg-violet-100 text-violet-700 border border-violet-200" : "text-slate-600"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Files
+            {assets.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] font-bold flex items-center justify-center">
+                {assets.length > 9 ? "9+" : assets.length}
+              </span>
+            )}
+          </button>
+
           {/* Save */}
           <button
             onClick={saveFile}
@@ -451,6 +555,113 @@ export default function Editor() {
           <pre className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap leading-relaxed">
             {compileLog}
           </pre>
+        </div>
+      )}
+
+      {/* ─── Assets Panel ─── */}
+      {assetsOpen && (
+        <div className="glass-panel shrink-0 border-b border-white/30 px-4 py-3 rounded-none">
+          <div className="max-w-full flex items-start gap-3">
+            {/* Upload button */}
+            <div className="shrink-0">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleAssetUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAsset}
+                className="neo-btn neo-btn-soft flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-violet-600 disabled:opacity-50"
+              >
+                {uploadingAsset ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                )}
+                Upload
+              </button>
+            </div>
+
+            {/* Assets list */}
+            <div className="flex-1 min-w-0">
+              {assetsLoading && (
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <span className="loading loading-spinner loading-xs" />
+                  Loading files…
+                </div>
+              )}
+              {!assetsLoading && assets.length === 0 && (
+                <p className="text-xs text-slate-400">No files uploaded yet. Upload images or resources to reference in your LaTeX code.</p>
+              )}
+              {assets.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {assets.map(asset => (
+                    <div key={asset.id}
+                      className="neo-inset flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs group">
+                      <svg className="w-3.5 h-3.5 text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      <span className="font-mono text-slate-700 max-w-[120px] truncate" title={asset.name}>
+                        {asset.name}
+                      </span>
+                      <span className="text-slate-400">{formatBytes(asset.size)}</span>
+                      <button
+                        onClick={() => copyAssetRef(asset)}
+                        title="Copy reference"
+                        className="text-slate-400 hover:text-violet-600 transition-colors"
+                      >
+                        {copiedAssetId === asset.id ? (
+                          <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleAssetDelete(asset)}
+                        disabled={deletingAssetId === asset.id}
+                        title="Delete"
+                        className="text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-50"
+                      >
+                        {deletingAssetId === asset.id ? (
+                          <span className="loading loading-spinner loading-xs" />
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                  d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {assets.length > 0 && (
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Click the copy icon to copy a LaTeX reference (e.g. <code className="font-mono">\includegraphics&#123;name.jpg&#125;</code>) to clipboard.
+                </p>
+              )}
+            </div>
+
+            {/* Refresh */}
+            <button onClick={fetchAssets} disabled={assetsLoading}
+              className="shrink-0 neo-btn neo-btn-soft w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 disabled:opacity-40">
+              <svg className={`w-3.5 h-3.5 ${assetsLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
