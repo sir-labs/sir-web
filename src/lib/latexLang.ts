@@ -50,7 +50,12 @@ const latexParser = StreamLanguage.define<State>({
       return "string";
     }
 
-    if (stream.match(/^\\\w+/)) return "keyword";
+    if (stream.match(/^\d+(?:\.\d+)?/)) return "number";
+    if (stream.match(/^[=+\-*/^_&|<>:;,]/)) return "operator";
+    if (stream.match(/^\\(?:begin|end|documentclass|usepackage|RequirePackage|newcommand|renewcommand|newenvironment|renewenvironment)\b/)) {
+      return "keyword";
+    }
+    if (stream.match(/^\\[a-zA-Z@]+[*]?/)) return "keyword";
     if (stream.match(/^\\./)) return "keyword";
     if (stream.match(/^[{}[\]]/)) return "bracket";
 
@@ -235,10 +240,12 @@ function latexCompletion(context: CompletionContext): CompletionResult | null {
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
 const latexHighlight = HighlightStyle.define([
-  { tag: tags.comment, color: "#94a3b8", fontStyle: "italic" },
-  { tag: tags.keyword, color: "#4f46e5", fontWeight: "600" },
-  { tag: tags.string, color: "#d97706" },
-  { tag: tags.bracket, color: "#7c3aed" },
+  { tag: tags.comment, color: "var(--cm-comment)", fontStyle: "italic" },
+  { tag: tags.keyword, color: "var(--cm-command)", fontWeight: "600" },
+  { tag: tags.string, color: "var(--cm-math)" },
+  { tag: tags.bracket, color: "var(--cm-bracket)", fontWeight: "600" },
+  { tag: tags.number, color: "var(--cm-number)" },
+  { tag: tags.operator, color: "var(--cm-operator)" },
 ]);
 
 const latexTheme = EditorView.theme({
@@ -246,68 +253,71 @@ const latexTheme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily:
-      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
     overflow: "auto",
   },
   ".cm-scroller::-webkit-scrollbar": { width: "6px", height: "6px" },
   ".cm-scroller::-webkit-scrollbar-track": { background: "transparent" },
   ".cm-scroller::-webkit-scrollbar-thumb": {
-    background: "rgba(100,116,139,0.3)",
+    background: "color-mix(in srgb, var(--cm-muted) 36%, transparent)",
     borderRadius: "3px",
   },
   ".cm-scroller::-webkit-scrollbar-thumb:hover": {
-    background: "rgba(100,116,139,0.5)",
+    background: "color-mix(in srgb, var(--cm-muted) 56%, transparent)",
   },
-  ".cm-content": { padding: "24px", caretColor: "#6366f1", color: "#374151" },
+  ".cm-content": {
+    padding: "24px",
+    caretColor: "var(--cm-caret)",
+    color: "var(--cm-text)",
+  },
   ".cm-line": { lineHeight: "1.625" },
   ".cm-gutters": {
-    backgroundColor: "rgba(255,255,255,0.4)",
-    borderRight: "1px solid rgba(255,255,255,0.2)",
-    color: "#64748b",
+    backgroundColor: "var(--cm-gutter-bg)",
+    borderRight: "1px solid var(--hairline)",
+    color: "var(--cm-muted)",
   },
   ".cm-lineNumbers .cm-gutterElement": {
     padding: "0 12px 0 16px",
     minWidth: "3rem",
   },
-  ".cm-activeLine": { backgroundColor: "rgba(99,102,241,0.04)" },
-  ".cm-activeLineGutter": { backgroundColor: "rgba(99,102,241,0.05)" },
-  ".cm-cursor": { borderLeftColor: "#6366f1" },
+  ".cm-activeLine": { backgroundColor: "var(--cm-line)" },
+  ".cm-activeLineGutter": { backgroundColor: "var(--cm-line)" },
+  ".cm-cursor": { borderLeftColor: "var(--cm-caret)" },
   ".cm-selectionBackground": {
-    backgroundColor: "rgba(99,102,241,0.15) !important",
+    backgroundColor: "var(--cm-selection) !important",
   },
   ".cm-focused .cm-selectionBackground": {
-    backgroundColor: "rgba(99,102,241,0.2) !important",
+    backgroundColor: "var(--cm-selection) !important",
   },
   // Autocomplete dropdown
   ".cm-tooltip.cm-tooltip-autocomplete": {
-    border: "1px solid rgba(99,102,241,0.2)",
-    borderRadius: "10px",
-    boxShadow: "0 8px 32px rgba(99,102,241,0.12), 0 2px 8px rgba(0,0,0,0.08)",
+    border: "1px solid var(--hairline)",
+    borderRadius: "8px",
+    boxShadow: "0 1px 3px rgba(20,20,19,0.08)",
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.95)",
-    backdropFilter: "blur(12px)",
+    backgroundColor: "var(--cm-tooltip-bg)",
   },
   ".cm-tooltip-autocomplete > ul": {
     fontFamily:
-      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
     fontSize: "13px",
     maxHeight: "240px",
   },
   ".cm-tooltip-autocomplete > ul > li": {
     padding: "4px 12px",
-    color: "#374151",
+    color: "var(--cm-text)",
   },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-    backgroundColor: "rgba(99,102,241,0.12)",
-    color: "#4f46e5",
+    backgroundColor: "var(--cm-selection)",
+    color: "var(--cm-command)",
   },
   ".cm-completionMatchedText": {
     textDecoration: "none",
-    fontWeight: "700",
-    color: "#4f46e5",
+    fontWeight: "600",
+    color: "var(--cm-command)",
   },
   ".cm-completionDetail": {
-    color: "#94a3b8",
+    color: "var(--cm-muted)",
     fontSize: "11px",
     marginLeft: "8px",
   },
