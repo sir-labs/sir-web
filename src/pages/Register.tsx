@@ -38,16 +38,13 @@ export default function Register() {
 
       {/* ── Brand Panel (desktop only) ─────────────────── */}
       <div className="hidden lg:flex flex-col relative overflow-hidden w-[440px] xl:w-[500px] shrink-0"
-           style={{ background: 'linear-gradient(145deg, #5b21b6 0%, #6d28d9 50%, #7c3aed 100%)' }}>
-
-        <div className="ambient-orb w-[460px] h-[460px] bg-white/8 -top-28 -left-28" style={{ animationDelay: '0s' }} />
-        <div className="ambient-orb w-56 h-56 bg-fuchsia-400/18 bottom-20 right-0" style={{ animationDelay: '-5s' }} />
+           style={{ background: '#cc785c' }}>
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 px-12 pt-10">
-          <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/25 flex items-center justify-center backdrop-blur-sm">
+          <div className="w-9 h-9 rounded-lg bg-[#faf9f5] border border-white/25 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                 strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
+                 strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-[#141413]">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
@@ -55,7 +52,7 @@ export default function Register() {
         </div>
 
         <div className="relative z-10 mt-auto px-12 pb-10">
-          <h2 className="text-white text-[2rem] font-bold leading-[1.2] tracking-tight mb-4">
+          <h2 className="text-white text-[2.5rem] leading-[1.08] tracking-tight mb-4">
             Join Sir. Platform<br />today.
           </h2>
           <p className="text-white/60 text-[0.9375rem] leading-relaxed max-w-[280px]">
@@ -78,7 +75,7 @@ export default function Register() {
 
           {/* Logo — mobile only */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+            <div className="w-9 h-9 rounded-lg bg-violet-600 flex items-center justify-center">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                    strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -89,7 +86,7 @@ export default function Register() {
 
           {/* Heading */}
           <div className="mb-8">
-            <h1 className="text-[1.875rem] font-bold tracking-tight text-slate-800 mb-1.5 leading-tight">
+            <h1 className="text-[2.25rem] tracking-tight text-slate-800 mb-1.5 leading-tight">
               Create an account
             </h1>
             <p className="text-slate-500 text-[0.9375rem]">Fill in your details to get started.</p>

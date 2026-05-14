@@ -64,17 +64,13 @@ export default function Login() {
 
       {/* ── Brand Panel (desktop only) ─────────────────── */}
       <div className="hidden lg:flex flex-col relative overflow-hidden w-[440px] xl:w-[500px] shrink-0"
-           style={{ background: 'linear-gradient(145deg, #4338ca 0%, #5b21b6 55%, #6d28d9 100%)' }}>
-
-        {/* Decorative orbs */}
-        <div className="ambient-orb w-[480px] h-[480px] bg-white/8 -top-32 -left-32" style={{ animationDelay: '0s' }} />
-        <div className="ambient-orb w-64 h-64 bg-violet-300/15 bottom-16 right-0" style={{ animationDelay: '-6s' }} />
+           style={{ background: '#181715' }}>
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 px-12 pt-10">
-          <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/25 flex items-center justify-center backdrop-blur-sm">
+          <div className="w-9 h-9 rounded-lg bg-[#faf9f5] border border-white/25 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                 strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
+                 strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-[#141413]">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
@@ -83,7 +79,7 @@ export default function Login() {
 
         {/* Headline */}
         <div className="relative z-10 mt-auto px-12 pb-10">
-          <h2 className="text-white text-[2.125rem] font-bold leading-[1.18] tracking-tight mb-4">
+          <h2 className="text-white text-[2.6rem] leading-[1.05] tracking-tight mb-4">
             Professional LaTeX<br />editing, streamlined.
           </h2>
           <p className="text-white/60 text-[0.9375rem] leading-relaxed mb-10 max-w-[280px]">
@@ -126,7 +122,7 @@ export default function Login() {
 
           {/* Logo — mobile only */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                    strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -137,7 +133,7 @@ export default function Login() {
 
           {/* Heading */}
           <div className="mb-8">
-            <h1 className="text-[1.875rem] font-bold tracking-tight text-slate-800 mb-1.5 leading-tight">
+            <h1 className="text-[2.25rem] tracking-tight text-slate-800 mb-1.5 leading-tight">
               Welcome back
             </h1>
             <p className="text-slate-500 text-[0.9375rem]">Sign in to your account to continue.</p>
