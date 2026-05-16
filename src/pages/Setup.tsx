@@ -50,18 +50,18 @@ export default function Setup() {
     return (
       <div className="neo-root min-h-screen flex items-center justify-center p-8">
         <div className="w-full max-w-[400px] text-center fade-up">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center mx-auto mb-6">
+          <div className="w-16 h-16 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center mx-auto mb-6">
             <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Setup complete</h1>
-          <p className="text-slate-500 text-sm mb-8">Admin account and OAuth client created successfully.</p>
+          <p className="text-slate-500 text-sm mb-8">The first admin account and OAuth client are ready.</p>
           <button
             onClick={() => navigate('/')}
             className="neo-btn neo-btn-primary w-full h-12 rounded-xl text-[0.9375rem] font-semibold"
           >
-            Go to Sign in
+            Go to sign in
           </button>
         </div>
       </div>
@@ -70,13 +70,13 @@ export default function Setup() {
 
   return (
     <div className="neo-root min-h-screen flex items-center justify-center p-8 relative overflow-hidden">
-      <div className="ambient-orb bg-indigo-500/10 w-96 h-96 -top-20 -right-20" style={{ animationDelay: '0s' }} />
-      <div className="ambient-orb bg-violet-500/8 w-80 h-80 bottom-0 -left-16" style={{ animationDelay: '-4s' }} />
+      <div className="ambient-orb bg-primary/10 w-96 h-96 -top-20 -right-20" style={{ animationDelay: '0s' }} />
+      <div className="ambient-orb bg-primary/10 w-80 h-80 bottom-0 -left-16" style={{ animationDelay: '-4s' }} />
 
       <div className="relative z-10 w-full max-w-[420px] fade-up">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/15">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                  strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -84,15 +84,15 @@ export default function Setup() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight leading-none">Sir. Platform</h1>
-            <p className="text-slate-400 text-xs mt-0.5">First-time setup</p>
+            <p className="text-slate-400 text-xs mt-0.5">System initialization</p>
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-8">
+        <div className="glass-panel rounded-xl p-8">
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Initialize system</h2>
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Initialize Sir</h2>
             <p className="text-slate-400 text-sm mt-1">
-              Creates the first admin account and OAuth client. This can only be done once.
+              Create the first admin account and OAuth client. This setup can only run once.
             </p>
           </div>
 
@@ -189,13 +189,13 @@ export default function Setup() {
 
             {loading ? (
               <div className="flex items-center justify-center gap-3 py-3">
-                <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-                <span className="text-slate-400 text-sm">Initializing…</span>
+                <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                <span className="text-slate-400 text-sm">Initializing...</span>
               </div>
             ) : (
               <button type="submit"
                 className="neo-btn neo-btn-primary w-full h-12 rounded-xl text-[0.9375rem] font-semibold mt-1">
-                Initialize system
+                Initialize Sir
               </button>
             )}
           </form>

@@ -28,18 +28,18 @@ export function PdfViewer({ data }: Props) {
   }, []);
 
   return (
-    <div ref={measureRef} className="overflow-y-auto overflow-x-hidden h-full bg-slate-200">
+    <div ref={measureRef} className="overflow-y-auto overflow-x-hidden h-full bg-surface-card">
       <Document
         file={file}
         onLoadSuccess={({ numPages }) => setNumPages(numPages)}
         loading={
           <div className="flex items-center justify-center h-40 gap-2 text-slate-400 text-xs font-mono">
             <span className="loading loading-spinner loading-sm" />
-            Rendering…
+            Rendering PDF...
           </div>
         }
         error={
-          <div className="flex items-center justify-center h-40 text-rose-400 text-xs font-mono">
+          <div className="flex items-center justify-center h-40 text-primary text-xs font-mono">
             Failed to render PDF
           </div>
         }

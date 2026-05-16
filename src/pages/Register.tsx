@@ -38,10 +38,10 @@ export default function Register() {
 
       {/* ── Brand Panel (desktop only) ─────────────────── */}
       <div className="hidden lg:flex flex-col relative overflow-hidden w-[440px] xl:w-[500px] shrink-0"
-           style={{ background: 'linear-gradient(145deg, #be123c 0%, #e11d48 50%, #f43f5e 100%)' }}>
+           style={{ background: 'linear-gradient(145deg, #a9583e 0%, #cc785c 50%, #e8a55a 100%)' }}>
 
         <div className="ambient-orb w-[460px] h-[460px] bg-white/8 -top-28 -left-28" style={{ animationDelay: '0s' }} />
-        <div className="ambient-orb w-56 h-56 bg-fuchsia-400/18 bottom-20 right-0" style={{ animationDelay: '-5s' }} />
+        <div className="ambient-orb w-56 h-56 bg-primary/15 bottom-20 right-0" style={{ animationDelay: '-5s' }} />
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 px-12 pt-10">
@@ -56,12 +56,12 @@ export default function Register() {
 
         <div className="relative z-10 mt-auto px-12 pb-10">
           <h2 className="text-white text-[2rem] font-bold leading-[1.2] tracking-tight mb-4">
-            Join Sir. Platform<br />today.
+            Start with a clean<br />document workspace.
           </h2>
           <p className="text-white/60 text-[0.9375rem] leading-relaxed max-w-[280px]">
-            Create your account and start compiling professional LaTeX documents in minutes.
+            Create an account for focused writing, asset management, and PDF review.
           </p>
-          <p className="text-white/25 text-xs mt-10">v2.0 · Encrypted · Secure</p>
+          <p className="text-white/35 text-xs mt-10">Private beta · Secure document operations</p>
         </div>
       </div>
 
@@ -71,14 +71,14 @@ export default function Register() {
           <ThemeToggle />
         </div>
 
-        <div className="lg:hidden ambient-orb bg-violet-500/14 w-96 h-96 -top-20 -right-20" style={{ animationDelay: '0s' }} />
-        <div className="lg:hidden ambient-orb bg-fuchsia-500/10 w-80 h-80 bottom-0 -left-16" style={{ animationDelay: '-4s' }} />
+        <div className="lg:hidden ambient-orb bg-primary/10 w-96 h-96 -top-20 -right-20" style={{ animationDelay: '0s' }} />
+        <div className="lg:hidden ambient-orb bg-primary/10 w-80 h-80 bottom-0 -left-16" style={{ animationDelay: '-4s' }} />
 
         <div className="relative z-10 w-full max-w-[360px] fade-up">
 
           {/* Logo — mobile only */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/15">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                    strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -90,9 +90,9 @@ export default function Register() {
           {/* Heading */}
           <div className="mb-8">
             <h1 className="text-[1.875rem] font-bold tracking-tight text-slate-800 mb-1.5 leading-tight">
-              Create an account
+              Create account
             </h1>
-            <p className="text-slate-500 text-[0.9375rem]">Fill in your details to get started.</p>
+            <p className="text-slate-500 text-[0.9375rem]">Set up access to your LaTeX workspace.</p>
           </div>
 
           {/* Error */}
@@ -136,8 +136,8 @@ export default function Register() {
 
             {loading ? (
               <div className="flex flex-col items-center gap-3 py-4">
-                <div className="w-7 h-7 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
-                <p className="text-slate-400 text-sm">Creating your account…</p>
+                <div className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                <p className="text-slate-400 text-sm">Creating your account...</p>
               </div>
             ) : (
               <button type="submit"

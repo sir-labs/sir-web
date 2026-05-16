@@ -201,19 +201,19 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
     <div className="neo-root w-full fade-up" style={{ animationDelay: '0.15s' }}>
 
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-[15px] font-semibold text-slate-700">Admin Panel</h2>
-        <div className="flex-1 h-px bg-white/35" />
+        <h2 className="text-[15px] font-semibold text-slate-700">Administration</h2>
+        <div className="flex-1 h-px bg-primary/25" />
       </div>
 
-      <div className="glass-panel rounded-2xl p-6">
+      <div className="glass-panel rounded-xl p-6">
 
         {/* Tabs */}
-        <div className="flex items-center justify-between mb-6 pb-5 border-b border-white/25">
+        <div className="flex items-center justify-between mb-6 pb-5 border-b border-primary/15">
           <div className="neo-inset flex items-center gap-1 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('users')}
               className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'users' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+                activeTab === 'users' ? 'bg-surface-card shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Users
@@ -221,15 +221,15 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
             <button
               onClick={() => setActiveTab('logs')}
               className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'logs' ? 'bg-white shadow-sm text-fuchsia-600' : 'text-slate-500 hover:text-slate-700'
+                activeTab === 'logs' ? 'bg-surface-card shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              System Logs
+              System logs
             </button>
             <button
               onClick={() => setActiveTab('settings')}
               className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'settings' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'
+                activeTab === 'settings' ? 'bg-surface-card shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Settings
@@ -258,7 +258,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                 </svg>
-                New user
+                Add user
               </button>
             )}
           </div>
@@ -276,8 +276,8 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
 
         {loading && (
           <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
-            <div className="w-4 h-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            Loading…
+            <div className="w-4 h-4 rounded-full border-2 border-primary/40 border-t-transparent animate-spin" />
+            Loading...
           </div>
         )}
 
@@ -299,28 +299,28 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                 <tbody>
                   {pagedUsers.map(u => (
                     <tr key={u.id} className="group">
-                      <td className="px-4 py-3 rounded-l-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-r-0 group-hover:bg-white/60 transition-colors">
+                      <td className="admin-cell px-4 py-3 rounded-l-xl backdrop-blur-sm border border-r-0 transition-colors">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-600 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${u.role === 'admin' ? 'bg-primary/15 text-primary border border-primary/25' : 'admin-chip text-slate-600 border border-slate-200'}`}>
                             {u.email.charAt(0).toUpperCase()}
                           </div>
                           <span className="font-medium text-slate-700 truncate max-w-[200px]">{u.email}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
-                        <span className="font-mono text-[11px] text-slate-400 bg-slate-100/60 px-2 py-1 rounded-lg">#{u.id}</span>
+                      <td className="admin-cell px-4 py-3 backdrop-blur-sm border-y transition-colors">
+                        <span className="admin-chip font-mono text-[11px] text-slate-400 px-2 py-1 rounded-lg">#{u.id}</span>
                       </td>
-                      <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-indigo-500' : 'bg-slate-400'}`} />
+                      <td className="admin-cell px-4 py-3 backdrop-blur-sm border-y transition-colors">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${u.role === 'admin' ? 'bg-primary/15 text-primary-active border-primary/25' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-primary' : 'bg-slate-400'}`} />
                           {u.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3 rounded-r-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-l-0 group-hover:bg-white/60 transition-colors">
+                      <td className="admin-cell px-4 py-3 rounded-r-xl backdrop-blur-sm border border-l-0 transition-colors">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => openModal(u)}
-                            className="neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-indigo-600 text-xs font-bold transition-all hover:bg-indigo-50"
+                            className="neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-primary text-xs font-bold transition-all hover:bg-primary/10"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
@@ -330,7 +330,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                           </button>
                           <button
                             onClick={() => setPendingDeleteId(u.id)}
-                            className="w-8 h-8 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-600 border border-rose-200 flex items-center justify-center transition-colors"
+                            className="w-8 h-8 rounded-xl bg-primary/15 hover:bg-primary/25 text-primary border border-primary/25 flex items-center justify-center transition-colors"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
@@ -367,26 +367,26 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                   {pagedLogs.map(l => {
                     const actionColors: Record<string, string> = {
                       CREATE: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                      DELETE: 'bg-rose-100 text-rose-700 border-rose-200',
+                      DELETE: 'bg-primary/15 text-primary-active border-primary/25',
                       UPDATE: 'bg-amber-100 text-amber-700 border-amber-200',
                     };
                     const actionKey = (l.action || '').toUpperCase().split('_')[0];
-                    const actionClass = actionColors[actionKey] ?? 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
+                    const actionClass = actionColors[actionKey] ?? 'bg-primary/15 text-primary-active border-primary/25';
                     return (
                       <tr key={l.id} className="group">
-                        <td className="px-4 py-3 rounded-l-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-r-0 group-hover:bg-white/60 transition-colors whitespace-nowrap">
+                        <td className="admin-cell px-4 py-3 rounded-l-xl backdrop-blur-sm border border-r-0 transition-colors whitespace-nowrap">
                           <span className="text-[11px] text-slate-500 font-mono">{new Date(l.created_at * 1000).toLocaleString()}</span>
                         </td>
-                        <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
+                        <td className="admin-cell px-4 py-3 backdrop-blur-sm border-y transition-colors">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${actionClass}`}>{l.action}</span>
                         </td>
-                        <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
-                          <span className="font-mono text-[11px] text-slate-400 bg-slate-100/60 px-2 py-1 rounded-lg">#{l.admin}</span>
+                        <td className="admin-cell px-4 py-3 backdrop-blur-sm border-y transition-colors">
+                          <span className="admin-chip font-mono text-[11px] text-slate-400 px-2 py-1 rounded-lg">#{l.admin}</span>
                         </td>
-                        <td className="px-4 py-3 bg-white/40 backdrop-blur-sm border-y border-white/50 group-hover:bg-white/60 transition-colors">
-                          <span className="font-mono text-[11px] text-slate-400 bg-slate-100/60 px-2 py-1 rounded-lg">#{l.target}</span>
+                        <td className="admin-cell px-4 py-3 backdrop-blur-sm border-y transition-colors">
+                          <span className="admin-chip font-mono text-[11px] text-slate-400 px-2 py-1 rounded-lg">#{l.target}</span>
                         </td>
-                        <td className="px-4 py-3 rounded-r-2xl bg-white/40 backdrop-blur-sm border border-white/50 border-l-0 group-hover:bg-white/60 transition-colors">
+                        <td className="admin-cell px-4 py-3 rounded-r-xl backdrop-blur-sm border border-l-0 transition-colors">
                           <span className="text-xs text-slate-600">{l.details}</span>
                         </td>
                       </tr>
@@ -404,14 +404,14 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
             {settingsLoading && (
               <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
                 <div className="w-4 h-4 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-                Loading…
+                Loading...
               </div>
             )}
             {!settingsLoading && (
               <div className="flex flex-col gap-5">
                 <div>
                   <label className="field-label">Compiler URL</label>
-                  <p className="text-slate-400 text-xs mb-2">URL ของ LaTeX compile server ที่ใช้ในการ compile</p>
+                  <p className="text-slate-400 text-xs mb-2">LaTeX compile server endpoint used by the editor.</p>
                   <input
                     type="url"
                     value={settingsDraft['compile_url'] ?? ''}
@@ -421,7 +421,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                   />
                 </div>
 
-                <div className="flex items-center gap-3 pt-2 border-t border-white/30">
+                <div className="flex items-center gap-3 pt-2 border-t border-primary/15">
                   <button
                     onClick={saveSettings}
                     disabled={settingsSaving}
@@ -452,7 +452,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
 
         {/* Pagination */}
         {!loading && totalCount > 0 && (
-          <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/25">
+          <div className="flex items-center justify-between mt-5 pt-4 border-t border-primary/15">
             <p className="text-[11px] text-slate-400 font-mono">
               {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount}
             </p>
@@ -487,13 +487,13 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
       {/* Edit/Create Modal */}
       {(editingUser || isCreating) && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-700/25 backdrop-blur-sm p-4 animate-slide-up">
-          <div className="glass-panel w-full max-w-md rounded-2xl p-8 relative">
+          <div className="glass-panel w-full max-w-md rounded-xl p-8 relative">
             <div className="mb-6">
               <h3 className="text-lg font-bold text-slate-800 tracking-tight">
-                {isCreating ? 'New user' : 'Edit user'}
+                {isCreating ? 'Add user' : 'Edit user'}
               </h3>
               <p className="text-slate-400 text-sm mt-0.5">
-                {isCreating ? 'Fill in the details to create an account.' : "Update the user's information below."}
+                {isCreating ? 'Create an account with a role and password.' : "Update this user's access details."}
               </p>
             </div>
 
@@ -543,7 +543,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                 </div>
               )}
 
-              <div className="flex gap-3 mt-2 pt-2 border-t border-white/30">
+              <div className="flex gap-3 mt-2 pt-2 border-t border-primary/15">
                 <button
                   type="button"
                   onClick={() => { setEditingUser(null); setIsCreating(false); }}

@@ -28,14 +28,14 @@ const DEFAULT_LATEX = `\\documentclass{article}
 
 \\begin{document}
 
-\\title{\\textbf{LaTeX Studio}}
+\\title{\\textbf{Sir Document}}
 \\author{SIR.PLATFORM}
 \\date{\\today}
 \\maketitle
 
 \\section{Introduction}
-Welcome to the \\textbf{in-browser} LaTeX editor powered by real \\textit{LuaLaTeX}.
-Type LaTeX code on the left --- the live preview updates automatically on the right.
+Welcome to the \\textbf{Sir} LaTeX workspace powered by real \\textit{LuaLaTeX}.
+Write source on the left, then compile and review the PDF on the right.
 
 \\section{Basic Math}
 Inline math: $E = mc^2$ and $e^{i\\pi} + 1 = 0$.
@@ -620,17 +620,17 @@ export default function Editor() {
   const statusColor = {
     idle: "text-slate-400",
     stale: "text-amber-500",
-    compiling: "text-indigo-400",
+    compiling: "text-primary",
     done: "text-emerald-400",
-    error: "text-rose-400",
+    error: "text-primary",
   }[status];
 
   const statusLabel = {
     idle: "Ready",
-    stale: "Not compiled",
-    compiling: "Compiling...",
-    done: "Compiled",
-    error: "Error",
+  stale: "Needs compile",
+  compiling: "Compiling...",
+  done: "PDF ready",
+  error: "Compile error",
   }[status];
 
   return (
@@ -642,7 +642,7 @@ export default function Editor() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/dashboard")}
-              title="Back to Dashboard"
+              title="Back to documents"
               className="neo-btn neo-btn-soft w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
             >
               <svg
@@ -662,7 +662,7 @@ export default function Editor() {
             <button
               onClick={() => setConfirmNewDoc(true)}
               title="New Document"
-              className="neo-btn neo-btn-soft w-9 h-9 rounded-xl flex items-center justify-center transition-colors text-indigo-600"
+              className="neo-btn neo-btn-soft w-9 h-9 rounded-xl flex items-center justify-center transition-colors text-primary"
             >
               <svg
                 className="w-4 h-4"
@@ -680,8 +680,8 @@ export default function Editor() {
             </button>
           </div>
           <div>
-            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-700 to-fuchsia-600 leading-none">
-              LaTeX Studio
+            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-active to-primary leading-none">
+              Sir Editor
             </h1>
             <input
               value={fileName}
@@ -700,7 +700,7 @@ export default function Editor() {
               onClick={() => setViewMode(m)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all ${
                 viewMode === m
-                  ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                  ? "bg-primary/15 text-primary-active border border-primary/25"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
@@ -729,9 +729,9 @@ export default function Editor() {
 
           {/* Compile status + cache */}
           <div className="neo-inset flex items-center gap-2 px-3 py-1.5 rounded-xl">
-            {status === "compiling" && <span className="loading loading-spinner loading-xs text-indigo-400" />}
+            {status === "compiling" && <span className="loading loading-spinner loading-xs text-primary" />}
             {status === "done"      && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
-            {status === "error"     && <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />}
+            {status === "error"     && <span className="w-2 h-2 rounded-full bg-error shrink-0" />}
             {status === "stale"     && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
             {status === "idle"      && <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />}
             <span className={`text-xs font-bold ${statusColor}`}>{statusLabel}</span>
@@ -769,7 +769,7 @@ export default function Editor() {
           <button
             onClick={() => compile(latexCode)}
             disabled={status === "compiling" || saveStatus === "saving"}
-            className="neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {status === "compiling" ? (
               <span className="loading loading-spinner loading-xs" />
@@ -781,14 +781,14 @@ export default function Editor() {
                   d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             )}
-            Compile
+            Compile PDF
           </button>
 
           {/* Assets */}
           <button
             onClick={() => setAssetsOpen(v => !v)}
             className={`neo-btn neo-btn-soft flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-              assetsOpen ? "bg-violet-100 text-violet-700 border border-violet-200" : "text-slate-600"
+              assetsOpen ? "bg-primary/15 text-primary-active border border-primary/25" : "text-slate-600"
             }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -797,7 +797,7 @@ export default function Editor() {
             </svg>
             Assets
             {assets.length > 0 && (
-              <span className="min-w-[16px] h-4 px-1 rounded-full bg-violet-500 text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="min-w-[16px] h-4 px-1 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
                 {assets.length > 9 ? "9+" : assets.length}
               </span>
             )}
@@ -811,7 +811,7 @@ export default function Editor() {
               saveStatus === "saved"
                 ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                 : saveStatus === "error"
-                  ? "bg-rose-100 text-rose-700 border border-rose-200"
+                  ? "bg-primary/15 text-primary-active border border-primary/25"
                   : "neo-btn-soft text-slate-600 disabled:opacity-50"
             }`}
           >
@@ -850,27 +850,27 @@ export default function Editor() {
               <div className="absolute top-full right-0 mt-1.5 w-44 glass-panel border border-white/40 rounded-xl shadow-lg z-50 overflow-hidden py-1">
                 <button
                   onClick={() => { handleDownloadPdf(); setExportOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-primary/10 hover:text-primary-active transition-colors"
                 >
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                       d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                   <div>
-                    <div>Export as PDF</div>
+                    <div>Export PDF</div>
                     <div className="text-[10px] text-slate-400 font-normal">Original document</div>
                   </div>
                 </button>
                 <button
                   onClick={() => { handleExportImages(); setExportOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-primary/10 hover:text-primary-active transition-colors"
                 >
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                       d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   <div>
-                    <div>Export as PNG</div>
+                    <div>Export pages as PNG</div>
                     <div className="text-[10px] text-slate-400 font-normal">One image per page</div>
                   </div>
                 </button>
@@ -885,7 +885,7 @@ export default function Editor() {
       {status === "error" && errorMsg && (
         <div className="neo-alert-error shrink-0 flex items-center justify-between px-6 py-2.5 rounded-none gap-4">
           <div className="flex items-center gap-2 min-w-0">
-            <svg className="w-4 h-4 shrink-0 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                 d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
             </svg>
@@ -894,7 +894,7 @@ export default function Editor() {
           {compileLog && (
             <button
               onClick={() => setShowLog((v) => !v)}
-              className="shrink-0 text-[11px] font-semibold underline underline-offset-2 hover:text-rose-300 transition-colors whitespace-nowrap"
+              className="shrink-0 text-[11px] font-semibold underline underline-offset-2 hover:text-primary-disabled transition-colors whitespace-nowrap"
             >
               {showLog ? "Hide log" : "Full log"}
             </button>
@@ -904,7 +904,7 @@ export default function Editor() {
 
       {/* ─── Compile log panel ─── */}
       {showLog && compileLog && (
-        <div className="neo-inset shrink-0 max-h-56 overflow-y-auto border-b border-rose-200 px-6 py-3 rounded-none">
+        <div className="neo-inset shrink-0 max-h-56 overflow-y-auto border-b border-primary/25 px-6 py-3 rounded-none">
           <pre className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap leading-relaxed">
             {compileLog.split("\n").map((line, i) => {
               const isError = line.startsWith("! ");
@@ -914,7 +914,7 @@ export default function Editor() {
                   key={i}
                   className={
                     isError || isFatal
-                      ? "text-rose-600 font-bold"
+                      ? "text-primary font-bold"
                       : line.startsWith("l.")
                         ? "text-amber-600"
                         : ""
@@ -948,9 +948,9 @@ export default function Editor() {
 
             {/* File loading overlay */}
             {editorLoading && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/60 backdrop-blur-sm">
-                <span className="loading loading-spinner loading-md text-indigo-500" />
-                <p className="text-xs font-mono text-slate-500">Loading file…</p>
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-surface-card/80 backdrop-blur-sm">
+                <span className="loading loading-spinner loading-md text-primary" />
+                <p className="text-xs font-mono text-slate-500">Loading document...</p>
               </div>
             )}
 
@@ -1001,16 +1001,16 @@ export default function Editor() {
         {/* Preview Pane */}
         {(viewMode === "split" || viewMode === "preview") && (
           <div
-             className={`neo-inset flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} bg-slate-100 relative rounded-none`}
+             className={`neo-inset flex flex-col min-h-0 ${viewMode === "split" ? "w-1/2" : "w-full"} bg-surface-card relative rounded-none`}
           >
-            <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-400 uppercase pointer-events-none z-10 select-none bg-slate-100/80 px-2 py-0.5 rounded">
+            <div className="absolute top-3 right-4 text-[10px] font-bold tracking-widest text-slate-400 uppercase pointer-events-none z-10 select-none bg-surface-card/80 px-2 py-0.5 rounded">
               Preview
             </div>
 
             {/* Compiling overlay — only show when no PDF yet (first compile) */}
             {status === "compiling" && !pdfBytes && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-100/80 backdrop-blur-sm gap-3">
-                <span className="loading loading-spinner loading-lg text-indigo-500" />
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface-card/80 backdrop-blur-sm gap-3">
+                <span className="loading loading-spinner loading-lg text-primary" />
                 <p className="text-xs font-mono text-slate-500">
                   Compiling with {engine}...
                 </p>
@@ -1034,7 +1034,7 @@ export default function Editor() {
                   />
                 </svg>
                 <p className="text-xs text-slate-400 font-mono">
-                  No preview yet
+                  Compile to preview the PDF
                 </p>
               </div>
             )}
@@ -1052,12 +1052,12 @@ export default function Editor() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-slate-700">Assets</span>
-                  <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary-active">
                     {assets.length}
                   </span>
                 </div>
                 <div className="mt-0.5 text-[10px] font-mono text-slate-400">
-                  Drag into editor or click file name
+                  Drag into the editor or click a file name
                 </div>
               </div>
               <button
@@ -1082,7 +1082,7 @@ export default function Editor() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingAsset}
-                className="neo-btn neo-btn-soft flex h-8 flex-1 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-violet-600 disabled:opacity-50"
+                className="neo-btn neo-btn-soft flex h-8 flex-1 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-primary disabled:opacity-50"
               >
                 {uploadingAsset ? (
                   <span className="loading loading-spinner loading-xs" />
@@ -1111,7 +1111,7 @@ export default function Editor() {
               {assetsLoading && (
                 <div className="flex items-center gap-2 px-2 py-3 text-xs text-slate-400">
                   <span className="loading loading-spinner loading-xs" />
-                  Loading files...
+                  Loading assets...
                 </div>
               )}
               {!assetsLoading && assets.length === 0 && (
@@ -1148,7 +1148,7 @@ export default function Editor() {
                         disabled={!isImageAsset(asset)}
                         className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border ${
                         isImageAsset(asset)
-                          ? "border-violet-200 bg-violet-100 text-violet-600"
+                          ? "border-primary/25 bg-primary/15 text-primary"
                           : "border-slate-200 bg-white/10 text-slate-500"
                       }`}>
                         {assetPreviewUrls[asset.id] ? (
@@ -1184,7 +1184,7 @@ export default function Editor() {
                         <button
                           onClick={() => copyAssetRef(asset)}
                           title="Copy reference"
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-violet-100 hover:text-violet-600"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-primary/15 hover:text-primary"
                         >
                           {copiedAssetId === asset.id ? (
                             <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1201,7 +1201,7 @@ export default function Editor() {
                           onClick={() => handleAssetDelete(asset)}
                           disabled={deletingAssetId === asset.id}
                           title="Delete"
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-500 disabled:opacity-50"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-primary/15 hover:text-primary disabled:opacity-50"
                         >
                           {deletingAssetId === asset.id ? (
                             <span className="loading loading-spinner loading-xs" />
@@ -1290,8 +1290,8 @@ export default function Editor() {
       <ConfirmDialog
         open={confirmNewDoc}
         title="New document"
-        description="Start a new document? Any unsaved changes will be lost."
-        confirmLabel="New document"
+        description="Start a fresh document? Unsaved changes in the current editor will be lost."
+        confirmLabel="Create document"
         onConfirm={() => {
           setConfirmNewDoc(false);
           setSearchParams({}, { replace: true });
