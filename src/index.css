@@ -2,6 +2,6 @@
 @plugin "daisyui/index.js";
 
 @theme {
-  --color-primary: #6f77ff;
-  --color-primary-focus: #5f67f0;
+  --color-primary: #e11d48;
+  --color-primary-focus: #be123c;
 }

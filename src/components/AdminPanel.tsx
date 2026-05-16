@@ -2,15 +2,22 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from './ConfirmDialog';
 
-const BASE_URL = import.meta.env.VITE_BASE_URL;
+import { AUTH_URL, API_URL } from '../config';
 const PAGE_SIZE = 20;
 
 export default function AdminPanel({ accessToken }: { accessToken: string }) {
-  const [activeTab, setActiveTab] = useState<'users' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'settings'>('users');
   const [users, setUsers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Settings state
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState<Record<string, string>>({});
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   const [usersPage, setUsersPage] = useState(1);
   const [logsPage, setLogsPage] = useState(1);
@@ -30,13 +37,56 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
   useEffect(() => {
     if (activeTab === 'users' && !fetchedRef.current.has('users')) fetchUsers();
     else if (activeTab === 'logs' && !fetchedRef.current.has('logs')) fetchLogs();
+    else if (activeTab === 'settings' && !fetchedRef.current.has('settings')) fetchSettings();
   }, [activeTab]);
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/settings`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error();
+      const data: { key: string; value: string }[] = await res.json();
+      const map: Record<string, string> = {};
+      data.forEach(s => { map[s.key] = s.value; });
+      setSettings(map);
+      setSettingsDraft(map);
+      fetchedRef.current.add('settings');
+    } catch {
+      setError('Failed to fetch settings');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    try {
+      for (const [key, value] of Object.entries(settingsDraft)) {
+        if (value === settings[key]) continue;
+        await fetch(`${API_URL}/api/admin/settings`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, value }),
+        });
+      }
+      setSettings({ ...settingsDraft });
+      fetchedRef.current.delete('settings');
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2000);
+    } catch {
+      setError('Failed to save settings');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${BASE_URL}/api/admin/users`, {
+      const res = await fetch(`${AUTH_URL}/api/admin/users`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error('Failed to fetch users');
@@ -55,7 +105,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${BASE_URL}/api/admin/logs`, {
+      const res = await fetch(`${AUTH_URL}/api/admin/logs`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error('Failed to fetch logs');
@@ -79,7 +129,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
   const handleDeleteUser = async (id: string) => {
     setPendingDeleteId(null);
     try {
-      const res = await fetch(`${BASE_URL}/api/admin/users/${id}`, {
+      const res = await fetch(`${AUTH_URL}/api/admin/users/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -115,8 +165,8 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
       if (isCreating && !editPassword) throw new Error('Password is required for new users');
 
       const url = isCreating
-        ? `${BASE_URL}/api/admin/users`
-        : `${BASE_URL}/api/admin/users/${editingUser.id}`;
+        ? `${AUTH_URL}/api/admin/users`
+        : `${AUTH_URL}/api/admin/users/${editingUser.id}`;
 
       const res = await fetch(url, {
         method: isCreating ? 'POST' : 'PUT',
@@ -176,11 +226,19 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
             >
               System Logs
             </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'settings' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Settings
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Refresh */}
-            <button
+            {/* Refresh — only for users/logs tabs */}
+            {activeTab !== 'settings' && <button
               onClick={handleRefresh}
               disabled={loading}
               title="Refresh"
@@ -190,7 +248,7 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-            </button>
+            </button>}
 
             {activeTab === 'users' && (
               <button
@@ -336,6 +394,58 @@ export default function AdminPanel({ accessToken }: { accessToken: string }) {
                   })}
                 </tbody>
               </table>
+            )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div>
+            {settingsLoading && (
+              <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
+                <div className="w-4 h-4 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                Loading…
+              </div>
+            )}
+            {!settingsLoading && (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <label className="field-label">Compiler URL</label>
+                  <p className="text-slate-400 text-xs mb-2">URL ของ LaTeX compile server ที่ใช้ในการ compile</p>
+                  <input
+                    type="url"
+                    value={settingsDraft['compile_url'] ?? ''}
+                    onChange={e => setSettingsDraft(d => ({ ...d, compile_url: e.target.value }))}
+                    className="neo-input w-full rounded-xl px-4 h-11 font-mono text-sm"
+                    placeholder="https://example.com/compile"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2 border-t border-white/30">
+                  <button
+                    onClick={saveSettings}
+                    disabled={settingsSaving}
+                    className={`neo-btn flex items-center gap-2 h-10 px-5 rounded-xl text-sm font-semibold transition-colors ${
+                      settingsSaved
+                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        : 'neo-btn-primary border-0'
+                    } disabled:opacity-50`}
+                  >
+                    {settingsSaving && <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
+                    {settingsSaved
+                      ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>Saved</>
+                      : 'Save settings'
+                    }
+                  </button>
+                  <button
+                    onClick={() => setSettingsDraft({ ...settings })}
+                    disabled={settingsSaving}
+                    className="neo-btn neo-btn-soft h-10 px-4 rounded-xl text-sm text-slate-500"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}

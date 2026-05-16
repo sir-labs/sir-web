@@ -5,7 +5,7 @@ import AdminPanel from "../components/AdminPanel";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 
-const BASE_URL = import.meta.env.VITE_BASE_URL;
+import { AUTH_URL, API_URL } from '../config';
 
 interface UserProfile {
   email: string;
@@ -61,7 +61,7 @@ export default function Dashboard() {
 
   const fetchUserProfile = useCallback(async (token: string) => {
     try {
-      const res = await fetch(`${BASE_URL}/api/me`, {
+      const res = await fetch(`${AUTH_URL}/api/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -86,7 +86,7 @@ export default function Dashboard() {
     setFilesLoading(true);
     setFilesError("");
     try {
-      const res = await fetch(`${BASE_URL}/api/latex-files`, {
+      const res = await fetch(`${API_URL}/api/latex-files`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error("Failed to load files.");
@@ -113,7 +113,7 @@ export default function Dashboard() {
     setRenamingId(null);
     if (!name || name === file.name || !accessToken) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/latex-files/${file.id}`, {
+      const res = await fetch(`${API_URL}/api/latex-files/${file.id}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -130,7 +130,7 @@ export default function Dashboard() {
     setDeletingId(file.id);
     setPendingDelete(null);
     try {
-      const res = await fetch(`${BASE_URL}/api/latex-files/${file.id}`, {
+      const res = await fetch(`${API_URL}/api/latex-files/${file.id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${accessToken}` },
       });

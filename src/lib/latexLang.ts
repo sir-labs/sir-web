@@ -236,9 +236,9 @@ function latexCompletion(context: CompletionContext): CompletionResult | null {
 
 const latexHighlight = HighlightStyle.define([
   { tag: tags.comment, color: "#94a3b8", fontStyle: "italic" },
-  { tag: tags.keyword, color: "#4f46e5", fontWeight: "600" },
+  { tag: tags.keyword, color: "#e11d48", fontWeight: "600" },
   { tag: tags.string, color: "#d97706" },
-  { tag: tags.bracket, color: "#7c3aed" },
+  { tag: tags.bracket, color: "#be123c" },
 ]);
 
 const latexTheme = EditorView.theme({
@@ -258,7 +258,7 @@ const latexTheme = EditorView.theme({
   ".cm-scroller::-webkit-scrollbar-thumb:hover": {
     background: "rgba(100,116,139,0.5)",
   },
-  ".cm-content": { padding: "24px", caretColor: "#6366f1", color: "#374151" },
+  ".cm-content": { padding: "24px", caretColor: "#e11d48", color: "#374151" },
   ".cm-line": { lineHeight: "1.625" },
   ".cm-gutters": {
     backgroundColor: "rgba(255,255,255,0.4)",
@@ -269,20 +269,20 @@ const latexTheme = EditorView.theme({
     padding: "0 12px 0 16px",
     minWidth: "3rem",
   },
-  ".cm-activeLine": { backgroundColor: "rgba(99,102,241,0.04)" },
-  ".cm-activeLineGutter": { backgroundColor: "rgba(99,102,241,0.05)" },
-  ".cm-cursor": { borderLeftColor: "#6366f1" },
+  ".cm-activeLine": { backgroundColor: "rgba(225,29,72,0.04)" },
+  ".cm-activeLineGutter": { backgroundColor: "rgba(225,29,72,0.05)" },
+  ".cm-cursor": { borderLeftColor: "#e11d48" },
   ".cm-selectionBackground": {
-    backgroundColor: "rgba(99,102,241,0.15) !important",
+    backgroundColor: "rgba(225,29,72,0.15) !important",
   },
   ".cm-focused .cm-selectionBackground": {
-    backgroundColor: "rgba(99,102,241,0.2) !important",
+    backgroundColor: "rgba(225,29,72,0.2) !important",
   },
   // Autocomplete dropdown
   ".cm-tooltip.cm-tooltip-autocomplete": {
-    border: "1px solid rgba(99,102,241,0.2)",
+    border: "1px solid rgba(225,29,72,0.2)",
     borderRadius: "10px",
-    boxShadow: "0 8px 32px rgba(99,102,241,0.12), 0 2px 8px rgba(0,0,0,0.08)",
+    boxShadow: "0 8px 32px rgba(225,29,72,0.12), 0 2px 8px rgba(0,0,0,0.08)",
     overflow: "hidden",
     backgroundColor: "rgba(255,255,255,0.95)",
     backdropFilter: "blur(12px)",
@@ -298,13 +298,13 @@ const latexTheme = EditorView.theme({
     color: "#374151",
   },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-    backgroundColor: "rgba(99,102,241,0.12)",
-    color: "#4f46e5",
+    backgroundColor: "rgba(225,29,72,0.12)",
+    color: "#e11d48",
   },
   ".cm-completionMatchedText": {
     textDecoration: "none",
     fontWeight: "700",
-    color: "#4f46e5",
+    color: "#e11d48",
   },
   ".cm-completionDetail": {
     color: "#94a3b8",

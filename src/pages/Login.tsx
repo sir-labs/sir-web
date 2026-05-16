@@ -3,9 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocalStorage } from 'usehooks-ts';
 import { ThemeToggle } from '../components/ThemeToggle';
 
-const CLIENT_ID     = import.meta.env.VITE_CLIENT_ID;
-const CLIENT_SECRET = import.meta.env.VITE_CLIENT_SECRET;
-const BASE_URL      = import.meta.env.VITE_BASE_URL;
+import { AUTH_URL, CLIENT_ID, CLIENT_SECRET } from '../config';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -44,7 +42,7 @@ export default function Login() {
     formData.append('client_id',     CLIENT_ID);
     formData.append('client_secret', CLIENT_SECRET);
     formData.append('redirect_uri',  redirectUri);
-    const res = await fetch(`${BASE_URL}/oauth/token`, {
+    const res = await fetch(`${AUTH_URL}/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData,
@@ -56,7 +54,7 @@ export default function Login() {
 
   const handleLogin = () => {
     const redirectUri = window.location.origin + '/';
-    window.location.href = `${BASE_URL}/oauth/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    window.location.href = `${AUTH_URL}/oauth/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}`;
   };
 
   return (
@@ -64,7 +62,7 @@ export default function Login() {
 
       {/* ── Brand Panel (desktop only) ─────────────────── */}
       <div className="hidden lg:flex flex-col relative overflow-hidden w-[440px] xl:w-[500px] shrink-0"
-           style={{ background: 'linear-gradient(145deg, #4338ca 0%, #5b21b6 55%, #6d28d9 100%)' }}>
+           style={{ background: 'linear-gradient(145deg, #be123c 0%, #e11d48 55%, #f43f5e 100%)' }}>
 
         {/* Decorative orbs */}
         <div className="ambient-orb w-[480px] h-[480px] bg-white/8 -top-32 -left-32" style={{ animationDelay: '0s' }} />

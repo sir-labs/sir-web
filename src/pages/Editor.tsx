@@ -8,7 +8,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PdfViewer } from "../components/PdfViewer";
 import { latexExtensions } from "../lib/latexLang";
 
-const BASE_URL = import.meta.env.VITE_BASE_URL ?? "http://localhost:8787";
+import { API_URL } from '../config';
 
 const DEFAULT_LATEX = `\\documentclass{article}
 \\usepackage{amsmath}
@@ -249,7 +249,7 @@ export default function Editor() {
       if (!accessToken) return;
       setEditorLoading(true);
       try {
-        const res = await fetch(`${BASE_URL}/api/latex-files/${id}`, {
+        const res = await fetch(`${API_URL}/api/latex-files/${id}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) return;
@@ -277,7 +277,7 @@ export default function Editor() {
     if (!accessToken) return;
     setAssetsLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/assets`, {
+      const res = await fetch(`${API_URL}/api/assets`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) return;
@@ -306,7 +306,7 @@ export default function Editor() {
 
     Promise.all(previewAssets.map(async (asset) => {
       try {
-        const res = await fetch(`${BASE_URL}/api/assets/${asset.id}/preview`, {
+        const res = await fetch(`${API_URL}/api/assets/${asset.id}/preview`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) return;
@@ -341,7 +341,7 @@ export default function Editor() {
 
     let cancelled = false;
     setSelectedAssetLoading(true);
-    fetch(`${BASE_URL}/api/assets/${selectedAsset.id}/content`, {
+    fetch(`${API_URL}/api/assets/${selectedAsset.id}/content`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then(async (res) => {
@@ -382,7 +382,7 @@ export default function Editor() {
         if (thumbnail) {
           form.append("thumbnail", thumbnail, `${file.name}.preview.webp`);
         }
-        const res = await fetch(`${BASE_URL}/api/assets`, {
+        const res = await fetch(`${API_URL}/api/assets`, {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
           body: form,
@@ -401,7 +401,7 @@ export default function Editor() {
     if (!accessToken) return;
     setDeletingAssetId(asset.id);
     try {
-      await fetch(`${BASE_URL}/api/assets/${asset.id}`, {
+      await fetch(`${API_URL}/api/assets/${asset.id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -487,7 +487,7 @@ export default function Editor() {
     setCacheStatus(null);
 
     try {
-      const res = await fetch(`${BASE_URL}/api/compile`, {
+      const res = await fetch(`${API_URL}/api/compile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -525,7 +525,7 @@ export default function Editor() {
     setSaveStatus("saving");
     try {
       if (fileId) {
-        const res = await fetch(`${BASE_URL}/api/latex-files/${fileId}`, {
+        const res = await fetch(`${API_URL}/api/latex-files/${fileId}`, {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -535,7 +535,7 @@ export default function Editor() {
         });
         if (!res.ok) throw new Error();
       } else {
-        const res = await fetch(`${BASE_URL}/api/latex-files`, {
+        const res = await fetch(`${API_URL}/api/latex-files`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,

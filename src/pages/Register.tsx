@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ThemeToggle } from '../components/ThemeToggle';
 
-const BASE_URL = import.meta.env.VITE_BASE_URL;
+import { AUTH_URL } from '../config';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ export default function Register() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${BASE_URL}/register`, {
+      const res = await fetch(`${AUTH_URL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -38,7 +38,7 @@ export default function Register() {
 
       {/* ── Brand Panel (desktop only) ─────────────────── */}
       <div className="hidden lg:flex flex-col relative overflow-hidden w-[440px] xl:w-[500px] shrink-0"
-           style={{ background: 'linear-gradient(145deg, #5b21b6 0%, #6d28d9 50%, #7c3aed 100%)' }}>
+           style={{ background: 'linear-gradient(145deg, #be123c 0%, #e11d48 50%, #f43f5e 100%)' }}>
 
         <div className="ambient-orb w-[460px] h-[460px] bg-white/8 -top-28 -left-28" style={{ animationDelay: '0s' }} />
         <div className="ambient-orb w-56 h-56 bg-fuchsia-400/18 bottom-20 right-0" style={{ animationDelay: '-5s' }} />
