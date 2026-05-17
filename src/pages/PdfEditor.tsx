@@ -1000,7 +1000,7 @@ export default function PdfEditor() {
       }
 
       const bytes = await pdfDoc.save();
-      const url   = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const url   = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }));
       Object.assign(document.createElement('a'), { href: url, download: fileName || 'document.pdf' }).click();
       URL.revokeObjectURL(url);
     } catch (err) {
