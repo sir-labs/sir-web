@@ -88,6 +88,10 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function isPdfAsset(asset: UserAsset): boolean {
+  return asset.mime_type === "application/pdf" || asset.name.split(".").pop()?.toLowerCase() === "pdf";
+}
+
 function isImageAsset(asset: UserAsset): boolean {
   const ext = asset.name.split(".").pop()?.toLowerCase() ?? "";
   return asset.mime_type.startsWith("image/") || ["jpg", "jpeg", "png", "pdf", "eps", "svg"].includes(ext);
@@ -219,6 +223,7 @@ export default function Editor() {
   const [hoverPreviewPosition, setHoverPreviewPosition] = useState({ x: 0, y: 0 });
   const [selectedAsset, setSelectedAsset] = useState<UserAsset | null>(null);
   const [selectedAssetUrl, setSelectedAssetUrl] = useState<string | null>(null);
+  const [selectedAssetPdfData, setSelectedAssetPdfData] = useState<Uint8Array | null>(null);
   const [selectedAssetLoading, setSelectedAssetLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
@@ -239,6 +244,10 @@ export default function Editor() {
       if (selectedAssetUrl) URL.revokeObjectURL(selectedAssetUrl);
     };
   }, [assetPreviewUrls, selectedAssetUrl]);
+
+  useEffect(() => {
+    if (!selectedAsset) setSelectedAssetPdfData(null);
+  }, [selectedAsset]);
 
   useEffect(() => {
     if (!accessToken) navigate("/", { replace: true });
@@ -340,13 +349,19 @@ export default function Editor() {
     }
 
     let cancelled = false;
+    const asPdf = isPdfAsset(selectedAsset);
     setSelectedAssetLoading(true);
     fetch(`${API_URL}/api/assets/${selectedAsset.id}/content`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then(async (res) => {
         if (!res.ok) throw new Error("asset load failed");
-        const url = URL.createObjectURL(await res.blob());
+        const blob = await res.blob();
+        if (asPdf) {
+          const buffer = await blob.arrayBuffer();
+          if (!cancelled) setSelectedAssetPdfData(new Uint8Array(buffer));
+        }
+        const url = URL.createObjectURL(blob);
         if (cancelled) {
           URL.revokeObjectURL(url);
           return;
@@ -357,7 +372,7 @@ export default function Editor() {
         });
       })
       .catch(() => {
-        if (!cancelled) setSelectedAssetUrl(null);
+        if (!cancelled) { setSelectedAssetUrl(null); setSelectedAssetPdfData(null); }
       })
       .finally(() => {
         if (!cancelled) setSelectedAssetLoading(false);
@@ -1076,6 +1091,7 @@ export default function Editor() {
                 ref={fileInputRef}
                 type="file"
                 multiple
+                accept="image/*,application/pdf,.pdf,.eps,.svg,.tex,.bib,.cls,.sty"
                 className="hidden"
                 onChange={handleAssetUpload}
               />
@@ -1144,10 +1160,10 @@ export default function Editor() {
                     >
                       <button
                         type="button"
-                        onClick={() => isImageAsset(asset) && setSelectedAsset(asset)}
-                        disabled={!isImageAsset(asset)}
+                        onClick={() => (isImageAsset(asset) || isPdfAsset(asset)) && setSelectedAsset(asset)}
+                        disabled={!isImageAsset(asset) && !isPdfAsset(asset)}
                         className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border ${
-                        isImageAsset(asset)
+                        isImageAsset(asset) || isPdfAsset(asset)
                           ? "border-primary/25 bg-primary/15 text-primary"
                           : "border-slate-200 bg-white/10 text-slate-500"
                       }`}>
@@ -1157,6 +1173,13 @@ export default function Editor() {
                             alt={asset.name}
                             className="h-full w-full object-cover"
                           />
+                        ) : isPdfAsset(asset) ? (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
+                                  d="M9 13h6M9 17h4" />
+                          </svg>
                         ) : isImageAsset(asset) ? (
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
@@ -1177,7 +1200,7 @@ export default function Editor() {
                       >
                         <div className="truncate font-mono font-semibold text-slate-700">{asset.name}</div>
                         <div className="truncate text-[10px] text-slate-400">
-                          {isImageAsset(asset) ? "image" : "file"} - {formatBytes(asset.size)}
+                          {isPdfAsset(asset) ? "pdf" : isImageAsset(asset) ? "image" : "file"} · {formatBytes(asset.size)}
                         </div>
                       </button>
                       <div className="flex items-center gap-1 opacity-80 transition-opacity group-hover:opacity-100">
@@ -1221,7 +1244,7 @@ export default function Editor() {
         )}
       </div>
 
-      {selectedAsset && isImageAsset(selectedAsset) && (
+      {selectedAsset && (isImageAsset(selectedAsset) || isPdfAsset(selectedAsset)) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-5 backdrop-blur-sm"
           onClick={() => setSelectedAsset(null)}
@@ -1245,14 +1268,17 @@ export default function Editor() {
                 </svg>
               </button>
             </div>
-            <div className="flex min-h-[18rem] flex-1 items-center justify-center overflow-auto bg-slate-950/40 p-4">
+            <div className={`flex min-h-[18rem] flex-1 overflow-hidden ${isPdfAsset(selectedAsset) ? "" : "items-center justify-center"} bg-slate-950/40 ${isPdfAsset(selectedAsset) ? "" : "p-4"}`}>
               {selectedAssetLoading && (
-                <div className="flex items-center gap-2 text-xs text-slate-300">
+                <div className="flex h-full w-full items-center justify-center gap-2 text-xs text-slate-300">
                   <span className="loading loading-spinner loading-sm" />
-                  Loading image...
+                  Loading {isPdfAsset(selectedAsset) ? "PDF" : "image"}...
                 </div>
               )}
-              {!selectedAssetLoading && selectedAssetUrl && (
+              {!selectedAssetLoading && isPdfAsset(selectedAsset) && selectedAssetPdfData && (
+                <PdfViewer data={selectedAssetPdfData} />
+              )}
+              {!selectedAssetLoading && !isPdfAsset(selectedAsset) && selectedAssetUrl && (
                 <img
                   src={selectedAssetUrl}
                   alt={selectedAsset.name}
@@ -1260,7 +1286,7 @@ export default function Editor() {
                 />
               )}
               {!selectedAssetLoading && !selectedAssetUrl && (
-                <div className="text-xs text-slate-400">Preview unavailable</div>
+                <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">Preview unavailable</div>
               )}
             </div>
           </div>
