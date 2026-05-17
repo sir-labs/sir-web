@@ -1204,6 +1204,21 @@ export default function Editor() {
                         </div>
                       </button>
                       <div className="flex items-center gap-1 opacity-80 transition-opacity group-hover:opacity-100">
+                        {isPdfAsset(asset) && (
+                          <button
+                            onClick={() => {
+                              const url = `/pdf-editor?assetId=${asset.id}&name=${encodeURIComponent(asset.name)}`;
+                              window.open(url, '_blank');
+                            }}
+                            title="Open in PDF Editor"
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-primary/15 hover:text-primary"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           onClick={() => copyAssetRef(asset)}
                           title="Copy reference"

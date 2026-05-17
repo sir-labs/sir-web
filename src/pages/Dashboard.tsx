@@ -135,6 +135,15 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <button onClick={() => navigate('/pdf-editor')}
+              className="neo-btn neo-btn-soft flex items-center gap-2 h-9 px-4 rounded-xl text-sm">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6M9 17h4" />
+              </svg>
+              PDF Editor
+            </button>
             {user?.role === 'admin' && (
               <button onClick={() => navigate('/admin')}
                 className="neo-btn neo-btn-soft flex items-center gap-2 h-9 px-4 rounded-xl text-sm">
