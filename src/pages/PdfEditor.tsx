@@ -13,6 +13,7 @@ pdfjs.GlobalWorkerOptions.workerSrc =
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tool = 'cursor' | 'highlight' | 'rectangle' | 'note';
+type ViewMode = 'continuous' | 'fit-page' | 'two-up' | 'single';
 
 interface Annotation {
   id: string;
@@ -112,7 +113,10 @@ export default function PdfEditor() {
   const [fileName,   setFileName]   = useState(assetNameParam ?? '');
   const [assetLoading, setAssetLoading] = useState(!!assetId);
   const [viewerWidth, setViewerWidth] = useState(800);
+  const [viewerHeight, setViewerHeight] = useState(600);
   const [zoom, setZoom] = useState(1.0);
+  const [viewMode, setViewMode] = useState<ViewMode>('continuous');
+  const [pageAspectRatio, setPageAspectRatio] = useState(1.414); // default A4 h/w
 
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const viewerRef     = useRef<HTMLDivElement>(null);
@@ -150,7 +154,10 @@ export default function PdfEditor() {
   useEffect(() => {
     const el = viewerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setViewerWidth(e.contentRect.width));
+    const ro = new ResizeObserver(([e]) => {
+      setViewerWidth(e.contentRect.width);
+      setViewerHeight(e.contentRect.height);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -212,8 +219,10 @@ export default function PdfEditor() {
 
   const scrollToPage = useCallback((page: number) => {
     setCurrentPage(page);
-    pageRefs.current[page - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
+    if (viewMode !== 'single') {
+      pageRefs.current[page - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [viewMode]);
 
   // ── SVG coordinate helpers ──────────────────────────────────────────────────
   const svgCoords = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -306,10 +315,26 @@ export default function PdfEditor() {
       if (e.key === 'r') setActiveTool('rectangle');
       if (e.key === 'n') setActiveTool('note');
       if (e.key === 'v') setActiveTool('cursor');
+      if (e.key === 'ArrowLeft'  || e.key === 'PageUp')
+        setCurrentPage(p => Math.max(1, p - 1));
+      if (e.key === 'ArrowRight' || e.key === 'PageDown')
+        setCurrentPage(p => Math.min(numPages, p + 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteSelected, noteEditing]);
+  }, [deleteSelected, noteEditing, numPages]);
+
+  // ── Ctrl+scroll to zoom ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom(z => Math.min(3, Math.max(0.25, +( z + delta).toFixed(2))));
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, []);
 
   // ── Download ────────────────────────────────────────────────────────────────
   const download = useCallback(() => {
@@ -320,7 +345,11 @@ export default function PdfEditor() {
   }, [pdfData, fileName]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const pageWidth = Math.max(380, viewerWidth - 96) * zoom;
+  const baseWidth =
+    viewMode === 'two-up'   ? Math.max(180, (viewerWidth - 136) / 2) :
+    viewMode === 'fit-page' ? Math.min(viewerWidth - 64, (viewerHeight - 80) / pageAspectRatio) :
+    /* continuous / single */  Math.max(380, viewerWidth - 96);
+  const pageWidth = baseWidth * zoom;
 
   const annColor = (type: 'highlight' | 'rectangle', selected: boolean) => ({
     fill:   type === 'highlight' ? 'rgba(254,240,138,0.45)' : 'rgba(204,120,92,0.12)',
@@ -333,6 +362,86 @@ export default function PdfEditor() {
   const inProgressColor = activeTool === 'highlight'
     ? { fill: 'rgba(254,240,138,0.35)', stroke: 'rgba(234,179,8,0.7)' }
     : { fill: 'rgba(204,120,92,0.1)',   stroke: 'rgba(204,120,92,0.7)' };
+
+  // Render a single PDF page with SVG annotation overlay
+  const renderPage = (pageNumber: number) => {
+    const idx         = pageNumber - 1;
+    const pageAnns    = annotations.filter(a => a.page === pageNumber);
+    const drawingHere = drawing?.page === pageNumber;
+    const svgPointer  = activeTool === 'cursor' ? 'none' : 'all';
+    const svgCursor   = activeTool === 'cursor' ? 'default' : 'crosshair';
+    return (
+      <div
+        key={pageNumber}
+        ref={el => { pageRefs.current[idx] = el; }}
+        className="relative shadow-xl shrink-0"
+        style={{ width: pageWidth }}
+      >
+        <Page
+          pageNumber={pageNumber}
+          width={pageWidth}
+          renderTextLayer
+          renderAnnotationLayer
+          onRenderSuccess={pageNumber === 1
+            ? ({ width, height }) => setPageAspectRatio(height / width)
+            : undefined}
+        />
+        <svg
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '100%', height: '100%',
+            pointerEvents: svgPointer,
+            cursor: svgCursor,
+          }}
+          onMouseDown={activeTool !== 'cursor' ? handleMouseDown(pageNumber) : undefined}
+          onMouseMove={activeTool !== 'cursor' ? handleMouseMove(pageNumber) : undefined}
+          onMouseUp={activeTool !== 'cursor'   ? handleMouseUp(pageNumber)   : undefined}
+        >
+          {pageAnns.map(ann => {
+            const sel = ann.id === selectedId;
+            if (ann.type === 'note') {
+              return (
+                <g key={ann.id}
+                   style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                   onClick={e => handleAnnClick(ann.id, e as unknown as React.MouseEvent)}
+                   onMouseEnter={e => setHoveredNote({ id: ann.id, x: e.clientX, y: e.clientY })}
+                   onMouseLeave={() => setHoveredNote(null)}>
+                  <circle cx={`${ann.x * 100}%`} cy={`${ann.y * 100}%`} r="11"
+                    fill={sel ? 'rgba(37,99,235,0.95)' : 'rgba(59,130,246,0.85)'}
+                    stroke={sel ? '#1d4ed8' : 'transparent'} strokeWidth="2.5" />
+                  <text x={`${ann.x * 100}%`} y={`${ann.y * 100}%`}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize="9" fontWeight="700" fill="white"
+                    style={{ userSelect: 'none', pointerEvents: 'none' }}>N</text>
+                </g>
+              );
+            }
+            const c = annColor(ann.type, sel);
+            return (
+              <rect key={ann.id}
+                x={`${ann.x * 100}%`} y={`${ann.y * 100}%`}
+                width={`${ann.width * 100}%`} height={`${ann.height * 100}%`}
+                fill={c.fill} stroke={c.stroke} strokeWidth={c.strokeWidth}
+                style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                onClick={e => handleAnnClick(ann.id, e as unknown as React.MouseEvent)}
+              />
+            );
+          })}
+          {drawingHere && drawing && (
+            <rect
+              x={`${Math.min(drawing.startX, drawing.currentX) * 100}%`}
+              y={`${Math.min(drawing.startY, drawing.currentY) * 100}%`}
+              width={`${Math.abs(drawing.currentX - drawing.startX) * 100}%`}
+              height={`${Math.abs(drawing.currentY - drawing.startY) * 100}%`}
+              fill={inProgressColor.fill} stroke={inProgressColor.stroke}
+              strokeWidth="1.5" strokeDasharray="5 3"
+              style={{ pointerEvents: 'none' }}
+            />
+          )}
+        </svg>
+      </div>
+    );
+  };
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
@@ -385,6 +494,48 @@ export default function PdfEditor() {
                         style={{
                           background: activeTool === tool ? 'var(--accent)' : 'transparent',
                           color:      activeTool === tool ? '#fff' : 'var(--ink-3)',
+                        }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">{icon}</svg>
+                </button>
+              ))}
+            </div>
+
+            <div className="w-px h-5 mx-0.5 shrink-0" style={{ background: 'var(--hairline)' }} />
+
+            {/* View mode selector */}
+            <div className="flex items-center gap-0.5 rounded-xl p-1"
+                 style={{ background: 'var(--neo-surface)', border: '1px solid var(--hairline)' }}>
+              {([
+                {
+                  mode: 'continuous' as ViewMode, title: 'Continuous scroll',
+                  icon: <>
+                    <rect x="4" y="3" width="16" height="5" rx="1" strokeWidth="1.8" />
+                    <rect x="4" y="10" width="16" height="5" rx="1" strokeWidth="1.8" />
+                    <rect x="4" y="17" width="16" height="4" rx="1" strokeWidth="1.8" />
+                  </>,
+                },
+                {
+                  mode: 'fit-page' as ViewMode, title: 'Fit page',
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"
+                    d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M12 8v8" />,
+                },
+                {
+                  mode: 'two-up' as ViewMode, title: 'Two pages side by side',
+                  icon: <>
+                    <rect x="2"  y="4" width="9" height="16" rx="1.5" strokeWidth="1.8" />
+                    <rect x="13" y="4" width="9" height="16" rx="1.5" strokeWidth="1.8" />
+                  </>,
+                },
+                {
+                  mode: 'single' as ViewMode, title: 'Single page (← →)',
+                  icon: <rect x="5" y="3" width="14" height="18" rx="1.5" strokeWidth="1.8" />,
+                },
+              ] as { mode: ViewMode; title: string; icon: React.ReactNode }[]).map(({ mode, title, icon }) => (
+                <button key={mode} onClick={() => setViewMode(mode)} title={title}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg transition-all"
+                        style={{
+                          background: viewMode === mode ? 'var(--accent)' : 'transparent',
+                          color:      viewMode === mode ? '#fff' : 'var(--ink-3)',
                         }}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">{icon}</svg>
                 </button>
@@ -563,89 +714,53 @@ export default function PdfEditor() {
               className="flex-1 overflow-y-auto overflow-x-auto"
               style={{ background: 'var(--surface-card)', padding: '2rem' }}
             >
-              <div className="flex flex-col items-center gap-6">
-                {Array.from({ length: numPages }, (_, i) => {
-                  const pageAnns     = annotations.filter(a => a.page === i + 1);
-                  const drawingHere  = drawing?.page === i + 1;
-                  const svgPointer   = activeTool === 'cursor' ? 'none' : 'all';
-                  const svgCursor    = activeTool === 'cursor' ? 'default' : 'crosshair';
+              {/* Single page mode */}
+              {viewMode === 'single' && (
+                <div className="flex flex-col items-center min-h-full">
+                  <div className="flex-1 flex items-center justify-center">
+                    {numPages > 0 && renderPage(currentPage)}
+                  </div>
+                  {/* Prev / Next nav */}
+                  <div className="flex items-center gap-3 mt-4 shrink-0">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage <= 1}
+                      className="neo-btn neo-btn-soft h-8 px-4 text-xs disabled:opacity-30"
+                    >← Prev</button>
+                    <span className="text-xs font-mono" style={{ color: 'var(--ink-3)' }}>
+                      {currentPage} / {numPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))}
+                      disabled={currentPage >= numPages}
+                      className="neo-btn neo-btn-soft h-8 px-4 text-xs disabled:opacity-30"
+                    >Next →</button>
+                  </div>
+                </div>
+              )}
 
-                  return (
-                    <div
-                      key={i}
-                      ref={el => { pageRefs.current[i] = el; }}
-                      className="relative shadow-xl"
-                      style={{ width: pageWidth }}
-                    >
-                      <Page pageNumber={i + 1} width={pageWidth} renderTextLayer renderAnnotationLayer />
+              {/* Two-up mode */}
+              {viewMode === 'two-up' && (
+                <div className="flex flex-col items-center gap-6">
+                  {Array.from({ length: Math.ceil(numPages / 2) }, (_, pairIdx) => {
+                    const p1 = pairIdx * 2 + 1;
+                    const p2 = pairIdx * 2 + 2;
+                    return (
+                      <div key={pairIdx} className="flex gap-4 items-start">
+                        {renderPage(p1)}
+                        {p2 <= numPages && renderPage(p2)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-                      {/* SVG annotation overlay */}
-                      <svg
-                        style={{
-                          position: 'absolute', top: 0, left: 0,
-                          width: '100%', height: '100%',
-                          pointerEvents: svgPointer,
-                          cursor: svgCursor,
-                        }}
-                        onMouseDown={activeTool !== 'cursor' ? handleMouseDown(i + 1) : undefined}
-                        onMouseMove={activeTool !== 'cursor' ? handleMouseMove(i + 1) : undefined}
-                        onMouseUp={activeTool !== 'cursor'   ? handleMouseUp(i + 1)   : undefined}
-                      >
-                        {/* Existing annotations */}
-                        {pageAnns.map(ann => {
-                          const sel = ann.id === selectedId;
-
-                          if (ann.type === 'note') {
-                            return (
-                              <g key={ann.id}
-                                 style={{ pointerEvents: 'all', cursor: 'pointer' }}
-                                 onClick={e => handleAnnClick(ann.id, e as unknown as React.MouseEvent)}
-                                 onMouseEnter={e => setHoveredNote({ id: ann.id, x: e.clientX, y: e.clientY })}
-                                 onMouseLeave={() => setHoveredNote(null)}>
-                                <circle
-                                  cx={`${ann.x * 100}%`} cy={`${ann.y * 100}%`} r="11"
-                                  fill={sel ? 'rgba(37,99,235,0.95)' : 'rgba(59,130,246,0.85)'}
-                                  stroke={sel ? '#1d4ed8' : 'transparent'} strokeWidth="2.5"
-                                />
-                                <text
-                                  x={`${ann.x * 100}%`} y={`${ann.y * 100}%`}
-                                  textAnchor="middle" dominantBaseline="central"
-                                  fontSize="9" fontWeight="700" fill="white"
-                                  style={{ userSelect: 'none', pointerEvents: 'none' }}>N</text>
-                              </g>
-                            );
-                          }
-
-                          const c = annColor(ann.type, sel);
-                          return (
-                            <rect
-                              key={ann.id}
-                              x={`${ann.x * 100}%`} y={`${ann.y * 100}%`}
-                              width={`${ann.width * 100}%`} height={`${ann.height * 100}%`}
-                              fill={c.fill} stroke={c.stroke} strokeWidth={c.strokeWidth}
-                              style={{ pointerEvents: 'all', cursor: 'pointer' }}
-                              onClick={e => handleAnnClick(ann.id, e as unknown as React.MouseEvent)}
-                            />
-                          );
-                        })}
-
-                        {/* In-progress drawing */}
-                        {drawingHere && drawing && (
-                          <rect
-                            x={`${Math.min(drawing.startX, drawing.currentX) * 100}%`}
-                            y={`${Math.min(drawing.startY, drawing.currentY) * 100}%`}
-                            width={`${Math.abs(drawing.currentX - drawing.startX) * 100}%`}
-                            height={`${Math.abs(drawing.currentY - drawing.startY) * 100}%`}
-                            fill={inProgressColor.fill} stroke={inProgressColor.stroke}
-                            strokeWidth="1.5" strokeDasharray="5 3"
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        )}
-                      </svg>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* Continuous / fit-page mode */}
+              {(viewMode === 'continuous' || viewMode === 'fit-page') && (
+                <div className="flex flex-col items-center gap-6">
+                  {Array.from({ length: numPages }, (_, i) => renderPage(i + 1))}
+                </div>
+              )}
             </div>
           </Document>
         )}
