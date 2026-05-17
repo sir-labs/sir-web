@@ -1000,13 +1000,16 @@ export default function PdfEditor() {
       }
 
       const bytes = await pdfDoc.save();
-      const url   = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }));
+      // new Uint8Array(bytes) copies exactly the PDF bytes into a fresh ArrayBuffer,
+      // avoiding the TypeScript Uint8Array<ArrayBufferLike> issue and any sub-view padding.
+      const url   = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
       Object.assign(document.createElement('a'), { href: url, download: fileName || 'document.pdf' }).click();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('pdf-lib save error', err);
+      alert(`PDF export error: ${err instanceof Error ? err.message : String(err)}`);
       // Fallback: download original
-      const url = URL.createObjectURL(new Blob([pdfData.buffer as ArrayBuffer], { type: 'application/pdf' }));
+      const url = URL.createObjectURL(new Blob([new Uint8Array(pdfData)], { type: 'application/pdf' }));
       Object.assign(document.createElement('a'), { href: url, download: fileName || 'document.pdf' }).click();
       URL.revokeObjectURL(url);
     } finally {
