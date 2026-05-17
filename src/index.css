@@ -11,3 +11,13 @@
   --color-surface-dark: #181715;
   --color-primary-focus: #a9583e;
 }
+
+/* DaisyUI's built-in dark theme overrides --color-primary with blue; restore ours */
+[data-theme="dark"] {
+  --color-primary: #cc785c;
+  --color-primary-content: #ffffff;
+  --color-base-100: #181715;
+  --color-base-200: #252320;
+  --color-base-300: #1f1e1b;
+  --color-base-content: #faf9f5;
+}
